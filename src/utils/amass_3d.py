@@ -12,7 +12,7 @@ https://github.com/wei-mao-2019/HisRepItself/blob/master/utils/amass3d.py
 
 
 class Datasets(Dataset):
-    def __init__(self, data_dir, input_n, output_n, skip_rate, device, split=0):
+    def __init__(self, data_dir, input_n, output_n, skip_rate, body_model_dir, device, split=0):
         """
         :param data_dir: path_to_data
         :param actions: always None
@@ -62,7 +62,7 @@ class Datasets(Dataset):
         # parents = bm.kintree_table.data.numpy()[0, :]
         # np.savez_compressed('smpl_skeleton.npz', p3d0=p3d0, parents=parents)
 
-        skel = np.load('./body_models/smpl_skeleton.npz')  # load mean skeleton
+        skel = np.load(body_model_dir)  # load mean skeleton
         p3d0 = torch.from_numpy(skel['p3d0']).float().to(device)  # 
         parents = skel['parents']
         parent = {}

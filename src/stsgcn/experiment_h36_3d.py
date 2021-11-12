@@ -48,6 +48,7 @@ class H36_3DExperiment(Experiment):
             input_n=self.cfg["input_n"],
             output_n=self.cfg["output_n"],
             skip_rate=self.skip_rate,
+            body_model_dir=self.cfg["body_model_dir"],
             device=self.device,
             split=0,
         )
@@ -62,6 +63,7 @@ class H36_3DExperiment(Experiment):
             output_n=self.cfg["output_n"],
             skip_rate=self.skip_rate,
             device=self.device,
+            body_model_path=self.cfg["body_model_path"],
             split=1,
         )
         print(">>> Validation dataset length: {:d}".format(vald_dataset.__len__()))
@@ -258,4 +260,5 @@ class H36_3DExperiment(Experiment):
             self.cfg["n_viz"],
             self.skip_rate,
             self.cfg["actions_to_consider"],
+            self.cfg["body_model_dir"]
         )

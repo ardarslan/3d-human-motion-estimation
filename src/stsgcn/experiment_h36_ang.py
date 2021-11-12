@@ -50,6 +50,7 @@ class H36AngExperiment(Experiment):
             input_n=self.cfg["input_n"],
             output_n=self.cfg["output_n"],
             skip_rate=self.skip_rate,
+            body_model_dir=self.cfg["body_model_dir"],
             device=self.device,
             split=0,
         )
@@ -311,4 +312,5 @@ class H36AngExperiment(Experiment):
             self.cfg["n_viz"],
             self.skip_rate,
             self.cfg["actions_to_consider"],
+            self.cfg["body_model_dir"]
         )

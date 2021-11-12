@@ -16,9 +16,11 @@ adapted from
 https://github.com/wei-mao-2019/HisRepItself/blob/master/utils/dpw3d.py
 '''
 
-class Datasets(Dataset):
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    def __init__(self,data_dir,input_n,output_n,skip_rate,split=0):
+
+class Datasets(Dataset):
+    def __init__(self, data_dir, input_n, output_n, skip_rate, body_model_path, split=0):
         """
         :param path_to_data:
         :param actions:
@@ -32,7 +34,6 @@ class Datasets(Dataset):
         self.split = split
         self.in_n = input_n
         self.out_n = output_n
-        #self.sample_rate = opt.sample_rate
         self.p3d = []
         self.keys = []
         self.data_idx = []
@@ -65,7 +66,7 @@ class Datasets(Dataset):
         # p3d0 = lbs.vertices2joints(bm.J_regressor, v_shaped)  # [1,52,3]
         # p3d0 = (p3d0 - p3d0[:, 0:1, :]).float().cuda()[:, :22]
         # parents = bm.kintree_table.data.numpy()[0, :]
-        skel = np.load('./body_models/smpl_skeleton.npz')
+        skel = np.load(body_model_path)
         p3d0 = torch.from_numpy(skel['p3d0']).float().to(device)[:, :22]
         parents = skel['parents']
         parent = {}
@@ -123,5 +124,3 @@ class Datasets(Dataset):
         key, start_frame = self.data_idx[item]
         fs = np.arange(start_frame, start_frame + self.in_n + self.out_n)
         return self.p3d[key][fs]
-
-

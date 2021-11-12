@@ -52,6 +52,7 @@ class Amass3DExperiment(Experiment):
             input_n=self.cfg["input_n"],
             output_n=self.cfg["output_n"],
             skip_rate=self.skip_rate,
+            body_model_dir=self.cfg["body_model_dir"],
             device=self.device,
             split=0,
         )
@@ -66,6 +67,7 @@ class Amass3DExperiment(Experiment):
             output_n=self.cfg["output_n"],
             skip_rate=self.skip_rate,
             device=self.device,
+            body_model_path=self.cfg["body_model_path"],
             split=1,
         )
 
@@ -150,6 +152,7 @@ class Amass3DExperiment(Experiment):
             output_n=self.cfg["output_n"],
             skip_rate=self.skip_rate,
             device=self.device,
+            body_model_path=self.cfg["body_model_path"],
             split=2,
         )  # test
         loader_test = DataLoader(
@@ -204,4 +207,5 @@ class Amass3DExperiment(Experiment):
             self.device,
             self.cfg["n_viz"],
             self.skip_rate,
+            self.cfg["body_model_dir"]
         )
