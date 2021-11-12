@@ -102,17 +102,17 @@ def update(num,data_gt,data_pred,plots_gt,plots_pred,fig,ax):
 # In[12]:
 
 
-def visualize(input_n,output_n,visualize_from,path,modello,device,n_viz,skip_rate,actions):
+def visualize(input_n,output_n,visualize_from,path,modello,device,n_viz,skip_rate,body_model_dir,actions):
     actions=define_actions(actions)
     
     for action in actions:
     
         if visualize_from=='train':
-            loader=datasets.Datasets(path,input_n,output_n,skip_rate, split=0,actions=[action])
+            loader=datasets.Datasets(path,input_n,output_n,skip_rate, body_model_dir, split=0,actions=[action])
         elif visualize_from=='validation':
-            loader=datasets.Datasets(path,input_n,output_n,skip_rate, split=1,actions=[action])
+            loader=datasets.Datasets(path,input_n,output_n,skip_rate, body_model_dir, split=1,actions=[action])
         elif visualize_from=='test':
-            loader=datasets.Datasets(path,input_n,output_n,skip_rate, split=2,actions=[action])
+            loader=datasets.Datasets(path,input_n,output_n,skip_rate, body_model_dir, split=2,actions=[action])
             
         dim_used = np.array([6, 7, 8, 9, 12, 13, 14, 15, 21, 22, 23, 24, 27, 28, 29, 30, 36, 37, 38, 39, 40, 41, 42,
                             43, 44, 45, 46, 47, 51, 52, 53, 54, 55, 56, 57, 60, 61, 62, 75, 76, 77, 78, 79, 80, 81, 84, 85,

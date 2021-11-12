@@ -13,7 +13,7 @@ https://github.com/wei-mao-2019/HisRepItself/blob/master/utils/h36motion.py
 
 class Datasets(Dataset):
 
-    def __init__(self, data_dir, input_n, output_n, skip_rate, device, actions=None, split=0):
+    def __init__(self, data_dir, input_n, output_n, skip_rate, body_model_dir, device, actions=None, split=0):
         """
         :param path_to_data:
         :param actions:

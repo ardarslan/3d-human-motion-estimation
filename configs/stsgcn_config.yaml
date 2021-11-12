@@ -1,7 +1,8 @@
-experiment: h36_ang # amass_3d, h36_ang
+experiment: amass_3d # h36_ang, h36_3d
 
 # data:
 data_dir: datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+body_model_dir: body_models/
 input_n: 10  # number of model's input frames
 output_n: 25  # number of model's output frames.
 

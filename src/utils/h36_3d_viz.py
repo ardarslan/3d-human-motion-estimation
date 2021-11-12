@@ -147,7 +147,7 @@ def update(num, data_gt, data_pred, plots_gt, plots_pred, fig, ax):
 # In[12]:
 
 
-def visualize(input_n, output_n, visualize_from, path, modello, device, n_viz, skip_rate, actions):
+def visualize(input_n, output_n, visualize_from, path, modello, device, n_viz, skip_rate, body_model_dir, actions):
 
     actions = define_actions(actions)
 
@@ -155,15 +155,15 @@ def visualize(input_n, output_n, visualize_from, path, modello, device, n_viz, s
 
         if visualize_from == "train":
             loader = datasets.Datasets(
-                path, input_n, output_n, skip_rate, split=0, actions=[action]
+                path, input_n, output_n, skip_rate, body_model_dir, split=0, actions=[action]
             )
         elif visualize_from == "validation":
             loader = datasets.Datasets(
-                path, input_n, output_n, skip_rate, split=1, actions=[action]
+                path, input_n, output_n, skip_rate, body_model_dir, split=1, actions=[action]
             )
         elif visualize_from == "test":
             loader = datasets.Datasets(
-                path, input_n, output_n, skip_rate, split=2, actions=[action]
+                path, input_n, output_n, skip_rate, body_model_dir, split=2, actions=[action]
             )
 
         dim_used = np.array(
