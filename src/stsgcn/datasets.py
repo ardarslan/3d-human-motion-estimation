@@ -45,13 +45,13 @@ class Amass_3D_Dataset(Dataset):
         self.skip_rate = skip_rate
         seq_len = self.in_n + self.out_n
 
-        # amass_splits = [
-        #     ['CMU', 'MPI_Limits', 'TotalCapture', 'Eyes_Japan_Dataset', 'KIT', 'EKUT', 'TCD_handMocap', 'ACCAD'],
-        #     ['HumanEva', 'MPI_HDM05', 'SFU', 'MPI_mosh'],
-        #     ['BioMotionLab_NTroje']]
-        amass_splits = [['ACCAD'],
-                        ['HumanEva'],
-                        ['BioMotionLab_NTroje']]
+        amass_splits = [
+            ['CMU', 'MPI_Limits', 'TotalCapture', 'Eyes_Japan_Dataset', 'KIT', 'EKUT', 'TCD_handMocap', 'ACCAD'],
+            ['HumanEva', 'MPI_HDM05', 'SFU', 'MPI_mosh'],
+            ['BioMotionLab_NTroje']]
+        # amass_splits = [['ACCAD'],
+        #                 ['HumanEva'],
+        #                 ['BioMotionLab_NTroje']]
 
         skel = np.load(body_model_dir)  # load mean skeleton
         p3d0 = torch.from_numpy(skel['p3d0']).float().to(device)
