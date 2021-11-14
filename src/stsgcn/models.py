@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from ours.layers import ST_GCNN_layer, CNN_layer
+from stsgcn.layers import ST_GCNN_layer, CNN_layer
 
 
 class ZeroVelocity(nn.Module):

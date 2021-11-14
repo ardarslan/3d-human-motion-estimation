@@ -1,8 +1,8 @@
 import numpy as np
 import torch
-from ours.utils import get_model, read_config, get_optimizer, \
-                       get_scheduler, get_data_loader, \
-                       mpjpe_error, save_model, set_seeds
+from stsgcn.utils import get_model, read_config, get_optimizer, \
+                         get_scheduler, get_data_loader, \
+                         mpjpe_error, save_model, set_seeds
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")

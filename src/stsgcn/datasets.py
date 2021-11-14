@@ -2,7 +2,7 @@ import os
 import torch
 import numpy as np
 import pickle
-from ours.data_utils import ang2joint, readCSVasFloat, find_indices_srnn, expmap2xyz_torch, find_indices_256
+from stsgcn.data_utils import ang2joint, readCSVasFloat, find_indices_srnn, expmap2xyz_torch, find_indices_256
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

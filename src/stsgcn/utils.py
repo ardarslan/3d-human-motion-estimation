@@ -3,8 +3,8 @@ import random
 import torch
 import numpy as np
 import yaml
-from ours.models import ZeroVelocity, STSGCN
-from ours.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
+from stsgcn.models import ZeroVelocity, STSGCN
+from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
 
 
