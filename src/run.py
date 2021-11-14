@@ -1,4 +1,4 @@
-from ours.train import train
+from stsgcn.train import train
 
 config_path = "configs/stsgcn_config.yaml"
 
