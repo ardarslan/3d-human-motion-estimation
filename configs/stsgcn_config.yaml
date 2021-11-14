@@ -1,12 +1,12 @@
-experiment: amass_3d # h36_ang, h36_3d
-
 # data:
 data_dir: datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
-body_model_dir: body_models/
+dataset: h36m_3d  # amass_3d
+body_model_dir: body_models/smpl_skeleton.npz
 input_n: 10  # number of model's input frames
 output_n: 25  # number of model's output frames.
 
 # model:
+model: zero_velocity 
 n_stgcnn_layers: 9  # number of stgcnn layers
 n_ccnn_layers: 2  # number of layers for the Coordinate-Channel Convolution
 n_tcnn_layers: 4  # number of layers for the Time-Extrapolator Convolution
@@ -20,10 +20,14 @@ tcnn_dropout: 0.0  # tcnn dropout
 
 # run:
 mode: train  # choices=['train','test','viz']. Choose to train, test or visualize from the model. Either train, test or viz.
+optimizer: adam
+scheduler: multi_step_lr
+seed: 42
 n_epochs: 50  # number of epochs to train
 batch_size: 256  # batch size
-batch_size_test: 256  # batch size for the test set
+num_workers: 0  # 0 means use the same thread for preparing data
 lr: 0.01  # Learning rate of the optimizer
+weight_decay: 0.00001
 use_scheduler: True  # use MultiStepLR scheduler
 milestones: [15, 25, 35, 40]  # the epochs after which the learning rate is adjusted by gamma
 gamma: 0.1  # gamma correction to the learning rate, after reaching the milestone epochs
@@ -32,5 +36,4 @@ checkpoints_dir: checkpoints/
 
 # visualization:
 visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).
-actions_to_consider: all  # Actions to visualize. Choose either all or a list of actions.
 n_viz: 2  # Numbers of sequences to visualize for each action
