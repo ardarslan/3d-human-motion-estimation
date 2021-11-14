@@ -159,13 +159,22 @@ class H36_3DExperiment(Experiment):
                 )
 
     def test(self):
+        # load model from disk
         self.model.load_state_dict(
             torch.load(os.path.join(self.cfg["checkpoints_dir"], self.model_name))
         )
+
+        # put model into evaluation mode
         self.model.eval()
+
+        # initialize accum_loss and n_batches
         accum_loss = 0
         n_batches = 0  # number of batches for all the sequences
+
+        # assume actions will be all of the actions
         actions = define_actions(self.cfg["actions_to_consider"])
+
+        # we will ignore some of the joints
         dim_used = np.array(
             [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 22,
              23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 36, 37, 38,
@@ -209,7 +218,7 @@ class H36_3DExperiment(Experiment):
                     n += batch_dim
 
                     all_joints_seq = batch.clone()[
-                        :, self.cfg["input_n"] : self.cfg["input_nse"] + self.cfg["output_n"], :
+                        :, self.cfg["input_n"] : self.cfg["input_n"] + self.cfg["output_n"], :
                     ]
 
                     sequences_train = (
