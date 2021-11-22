@@ -1,8 +1,11 @@
 import numpy as np
 import torch
+from collections import Counter
 from stsgcn.utils import get_model, read_config, get_optimizer, \
                          get_scheduler, get_data_loader, \
-                         mpjpe_error, save_model, set_seeds
+                         mpjpe_error, save_model, set_seeds, \
+                         load_model, get_logger
+
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
@@ -10,9 +13,9 @@ print(f"Using device: {device}")
 
 def train_step_amass(model, optimizer, cfg, train_data_loader):
     joint_used = np.arange(4, 22)
-    total_train_loss = 0
     total_num_samples = 0
     model.train()
+    train_loss_dict = Counter()
     for batch in train_data_loader:
         batch = batch.float().to(device)[:, :, joint_used, :]  # (N, T, V, C)
         current_batch_size = batch.shape[0]
@@ -21,14 +24,17 @@ def train_step_amass(model, optimizer, cfg, train_data_loader):
         sequences_y = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], :, :]  # (N, T, V, C)
         optimizer.zero_grad()
         sequences_yhat = model(sequences_X)  # (N, T, V, C)
-        train_loss = mpjpe_error(sequences_yhat, sequences_y) * 1000
-        train_loss.backward()
+        mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y) * 1000
+        total_loss = mpjpe_loss
+        total_loss.backward()
+        train_loss_dict.update({"mpjpe": mpjpe_loss.detach().cpu() * current_batch_size,
+                                "total": total_loss.detach().cpu() * current_batch_size})
         if cfg["clip_grad"] is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["clip_grad"])
         optimizer.step()
-        total_train_loss += train_loss * current_batch_size
-    average_train_loss = total_train_loss.detach().cpu() / total_num_samples
-    return average_train_loss
+    for loss_function, loss_value in train_loss_dict.items():
+        train_loss_dict[loss_function] = loss_value / total_num_samples
+    return train_loss_dict
 
 
 def evaluation_step_amass(model, cfg, eval_data_loader, split):
@@ -36,8 +42,8 @@ def evaluation_step_amass(model, cfg, eval_data_loader, split):
     full_joint_used = np.arange(0, 22)
     model.eval()
     with torch.no_grad():
-        total_eval_loss = 0
         total_num_samples = 0
+        eval_loss_dict = Counter()
         for batch in eval_data_loader:
             batch = batch.float().to(device)  # (N, T, V, C)
             current_batch_size = batch.shape[0]
@@ -46,16 +52,19 @@ def evaluation_step_amass(model, cfg, eval_data_loader, split):
             if split == 1:  # validation
                 sequences_y = batch[:, cfg["input_n"]:cfg["input_n"]+cfg["output_n"], joint_used, :]
                 sequences_yhat = model(sequences_X)
-                eval_loss = mpjpe_error(sequences_yhat, sequences_y) * 1000
+                mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y) * 1000
             elif split == 2:  # test
                 sequences_y = batch[:, cfg["input_n"]:cfg["input_n"]+cfg["output_n"], full_joint_used, :]
                 sequences_yhat_partial = model(sequences_X)
                 sequences_yhat_all = sequences_y.clone()
                 sequences_yhat_all[:, :, joint_used, :] = sequences_yhat_partial
-                eval_loss = mpjpe_error(sequences_yhat_all, sequences_y) * 1000
-            total_eval_loss += eval_loss * current_batch_size
-        average_eval_loss = total_eval_loss.detach().cpu() / total_num_samples
-    return average_eval_loss
+                mpjpe_loss = mpjpe_error(sequences_yhat_all, sequences_y) * 1000
+            total_loss = mpjpe_loss
+            eval_loss_dict.update({"mpjpe": mpjpe_loss.detach().cpu() * current_batch_size,
+                                   "total": total_loss.detach().cpu() * current_batch_size})
+    for loss_function, loss_value in eval_loss_dict.items():
+        eval_loss_dict[loss_function] = loss_value / total_num_samples
+    return eval_loss_dict
 
 
 def train_step_h36(model, optimizer, cfg, train_data_loader):
@@ -69,9 +78,9 @@ def train_step_h36(model, optimizer, cfg, train_data_loader):
 
     indices_to_predict = np.setdiff1d(np.arange(0, 96), np.concatenate([constant_indices, indices_to_be_imputed]))
 
-    total_train_loss = 0
     total_num_samples = 0
     model.train()
+    train_loss_dict = Counter()
     for batch in train_data_loader:
         batch = batch.float().to(device)  # (N, T, V, C)
         current_batch_size = batch.shape[0]
@@ -80,17 +89,25 @@ def train_step_h36(model, optimizer, cfg, train_data_loader):
         sequences_y = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
         optimizer.zero_grad()
         sequences_yhat = model(sequences_X)  # (N, T, V, C)
-        train_loss = mpjpe_error(sequences_yhat, sequences_y)
-        train_loss.backward()
+        mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y)
+        total_loss = mpjpe_loss
+        total_loss.backward()
+        train_loss_dict.update({"mpjpe": mpjpe_loss.detach().cpu() * current_batch_size,
+                                "total": total_loss.detach().cpu() * current_batch_size})
         if cfg["clip_grad"] is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["clip_grad"])
         optimizer.step()
-        total_train_loss += train_loss * current_batch_size
-    average_train_loss = total_train_loss.detach().cpu() / total_num_samples
-    return average_train_loss
+    for loss_function, loss_value in train_loss_dict.items():
+        train_loss_dict[loss_function] = loss_value / total_num_samples
+    return train_loss_dict
 
 
 def evaluation_step_h36(model, cfg, eval_data_loader, split):
+    """
+    Unlike other step methods, this one returns sum of losses
+    in loss_dict. Not the average.
+    """
+
     model.eval()
 
     constant_joints = np.array([0, 1, 6, 11])
@@ -104,9 +121,8 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
     indices_to_predict = np.setdiff1d(np.arange(0, 96), np.concatenate([constant_indices, indices_to_be_imputed]))
 
     with torch.no_grad():
-        total_evaluation_loss_current_action = 0
         total_num_samples_current_action = 0
-
+        eval_loss_dict = Counter()
         for batch in eval_data_loader:
             batch = batch.float().to(device)
             current_batch_size = batch.shape[0]
@@ -115,7 +131,8 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
                 sequences_X = batch[:, 0:cfg["input_n"], indices_to_predict].view(-1, cfg["input_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
                 sequences_y = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
                 sequences_yhat = model(sequences_X)  # (N, T, V, C)
-                evaluation_loss = mpjpe_error(sequences_yhat, sequences_y)
+                mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y)
+                total_loss = mpjpe_loss
             elif split == 2:  # test
                 sequences_yhat_all = batch.clone()[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], :]
                 sequences_X = batch[:, 0:cfg["input_n"], indices_to_predict].view(-1, cfg["input_n"], len(indices_to_predict) // 3, 3)
@@ -124,42 +141,47 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
                 sequences_yhat_all[:, :, indices_to_predict] = sequences_yhat_partial
                 sequences_yhat_all[:, :, indices_to_be_imputed] = sequences_yhat_all[:, :, indices_to_impute_with]
                 sequences_yhat_all = sequences_yhat_all.view(-1, cfg["output_n"], 32, 3)
-                evaluation_loss = mpjpe_error(sequences_yhat_all, sequences_y)
-            total_evaluation_loss_current_action += evaluation_loss * current_batch_size
-
-        return total_num_samples_current_action, total_evaluation_loss_current_action
+                mpjpe_loss = mpjpe_error(sequences_yhat_all, sequences_y)
+                total_loss = mpjpe_loss
+            eval_loss_dict.update({"mpjpe": mpjpe_loss.detach().cpu() * current_batch_size,
+                                   "total": total_loss.detach().cpu() * current_batch_size})
+        # for loss_function, loss_value in eval_loss_dict.items():
+        #     eval_loss_dict[loss_function] = loss_value / total_num_samples_current_action
+        return eval_loss_dict, total_num_samples_current_action
 
 
 def train_step(model, optimizer, cfg, train_data_loader):
     if cfg["dataset"] in ["amass_3d"]:
-        average_train_loss = train_step_amass(model, optimizer, cfg, train_data_loader)
+        train_loss_dict = train_step_amass(model, optimizer, cfg, train_data_loader)
     elif cfg["dataset"] in ["h36m_3d"]:
-        average_train_loss = train_step_h36(model, optimizer, cfg, train_data_loader)
-    return average_train_loss
+        train_loss_dict = train_step_h36(model, optimizer, cfg, train_data_loader)
+    return train_loss_dict
 
 
 def evaluation_step(model, cfg, eval_data_loader, split):
     if cfg["dataset"] in ["amass_3d"]:
-        average_eval_loss = evaluation_step_amass(model, cfg, eval_data_loader, split)
+        eval_loss_dict = evaluation_step_amass(model, cfg, eval_data_loader, split)
     elif cfg["dataset"] in ["h36m_3d"]:
         if split == 1:  # validation
-            total_num_samples, total_evaluation_loss = evaluation_step_h36(model, cfg, eval_data_loader, split)
-            average_eval_loss = total_evaluation_loss / total_num_samples
+            eval_loss_dict, total_num_samples_current_action = evaluation_step_h36(model, cfg, eval_data_loader, split)
+            for loss_function, loss_value in eval_loss_dict.items():
+                eval_loss_dict[loss_function] = loss_value / total_num_samples_current_action
         elif split == 2:  # test
             actions = ["walking", "eating", "smoking", "discussion", "directions",
                        "greeting", "phoning", "posing", "purchases", "sitting",
                        "sittingdown", "takingphoto", "waiting", "walkingdog",
                        "walkingtogether"]
             total_num_samples = 0
-            total_evaluation_loss = 0
+            eval_loss_dict = Counter()
             for action in actions:
                 current_eval_data_loader = get_data_loader(cfg, split=2, actions=[action])
-                total_num_samples_current_action, total_evaluation_loss_current_action = evaluation_step_h36(model, cfg, current_eval_data_loader, split)
+                eval_loss_dict_current_action, total_num_samples_current_action = evaluation_step_h36(model, cfg, current_eval_data_loader, split)
                 total_num_samples += total_num_samples_current_action
-                total_evaluation_loss += total_evaluation_loss_current_action
-                print(f"Evaluation loss for action '{action}': {total_evaluation_loss_current_action / total_num_samples_current_action}")
-            average_eval_loss = total_evaluation_loss / total_num_samples
-    return average_eval_loss
+                eval_loss_dict.update(eval_loss_dict_current_action)
+                print(f"Evaluation loss for action '{action}': {eval_loss_dict_current_action['total'] / total_num_samples_current_action}")
+            for loss_function, loss_value in eval_loss_dict.items():
+                eval_loss_dict[loss_function] = loss_value / total_num_samples
+    return eval_loss_dict
 
 
 def train(config_path):
@@ -175,31 +197,46 @@ def train(config_path):
     train_data_loader = get_data_loader(cfg, split=0)
     validation_data_loader = get_data_loader(cfg, split=1)
 
-    train_losses = []
-    validation_losses = []
+    logger = get_logger(cfg)
 
     best_validation_loss = np.inf
+    early_stop_counter = 0
     for epoch in range(cfg["n_epochs"]):
         # train
-        current_train_loss = train_step(model, optimizer, cfg, train_data_loader)
-        train_losses.append(train_losses)
+        train_loss_dict = train_step(model, optimizer, cfg, train_data_loader)
+        for loss_function, loss_value in train_loss_dict.items():
+            logger.add_scalar(f"train/{loss_function}", loss_value, epoch)
+        current_total_train_loss = train_loss_dict['total']
 
         # validate
-        current_validation_loss = evaluation_step(model, cfg, validation_data_loader, split=1)
-        validation_losses.append(current_validation_loss)
+        validation_loss_dict = evaluation_step(model, cfg, validation_data_loader, split=1)
+        for loss_function, loss_value in validation_loss_dict.items():
+            logger.add_scalar(f"validation/{loss_function}", loss_value, epoch)
+        current_total_validation_loss = validation_loss_dict['total']
 
-        print(f"Epoch: {epoch}. Train loss: {current_train_loss}. Validation loss: {current_validation_loss}")
+        print(f"Epoch: {epoch}. Train loss: {current_total_train_loss}. Validation loss: {current_total_validation_loss}")
 
         if cfg["use_scheduler"]:
             scheduler.step()
 
-        if current_validation_loss < best_validation_loss:
+        if current_total_validation_loss < best_validation_loss:
             save_model(model, cfg)
+            best_validation_loss = current_total_validation_loss
+            early_stop_counter = 0
+        else:
+            early_stop_counter += 1
+
+        if early_stop_counter == cfg["early_stop_patience"]:
+            break
 
     # test
     test_data_loader = get_data_loader(cfg, split=2)
-    test_loss = evaluation_step(model, cfg, test_data_loader, split=2)
-    print(f"Test loss: {test_loss}")
+    model = load_model(cfg)
+    test_loss_dict = evaluation_step(model, cfg, test_data_loader, split=2)
+    for loss_function, loss_value in test_loss_dict.items():
+        logger.add_scalar(f"test/{loss_function}", loss_value, 1)
+    current_total_test_loss = test_loss_dict['total']
+    print(f"Test loss: {current_total_test_loss}")
 
 
 # def visualize(self):
