@@ -1,10 +1,12 @@
+import os
 import numpy as np
 import torch
 from collections import Counter
+from torch.utils.tensorboard import SummaryWriter
 from stsgcn.utils import get_model, read_config, get_optimizer, \
                          get_scheduler, get_data_loader, \
                          mpjpe_error, save_model, set_seeds, \
-                         load_model, get_logger
+                         load_model
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -197,7 +199,7 @@ def train(config_path):
     train_data_loader = get_data_loader(cfg, split=0)
     validation_data_loader = get_data_loader(cfg, split=1)
 
-    logger = get_logger(cfg)
+    logger = SummaryWriter(os.path.join(cfg["log_dir"], cfg["experiment_time"]))
 
     best_validation_loss = np.inf
     early_stop_counter = 0

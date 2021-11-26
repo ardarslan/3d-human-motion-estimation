@@ -5,17 +5,9 @@ import numpy as np
 import time
 import yaml
 import shutil
-from tensorboardX import SummaryWriter
 from stsgcn.models import ZeroVelocity, STSGCN
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
-
-
-def get_logger(cfg):
-    log_dir = cfg["log_dir"]
-    experiment_time = cfg["experiment_time"]
-    logger = SummaryWriter(os.path.join(log_dir, experiment_time))
-    return logger
 
 
 def get_model(cfg):
