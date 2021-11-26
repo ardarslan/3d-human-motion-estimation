@@ -1,12 +1,12 @@
 # data:
 data_dir: datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
-dataset: h36m_3d  # amass_3d
+dataset: amass_3d  # h36m_3d
 body_model_dir: body_models/smpl_skeleton.npz
 input_n: 10  # number of model's input frames
 output_n: 25  # number of model's output frames.
 
 # model:
-model: zero_velocity 
+model: stsgcn 
 n_stgcnn_layers: 9  # number of stgcnn layers
 n_ccnn_layers: 2  # number of layers for the Coordinate-Channel Convolution
 n_tcnn_layers: 4  # number of layers for the Time-Extrapolator Convolution
@@ -29,10 +29,11 @@ num_workers: 0  # 0 means use the same thread for preparing data
 lr: 0.01  # Learning rate of the optimizer
 weight_decay: 0.00001
 use_scheduler: True  # use MultiStepLR scheduler
+early_stop_patience: 5
 milestones: [15, 25, 35, 40]  # the epochs after which the learning rate is adjusted by gamma
 gamma: 0.1  # gamma correction to the learning rate, after reaching the milestone epochs
 clip_grad: null  # select max norm to clip gradients
-checkpoints_dir: checkpoints/
+log_dir: logs/
 
 # visualization:
 visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).

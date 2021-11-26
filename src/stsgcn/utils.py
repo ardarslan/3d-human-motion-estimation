@@ -2,10 +2,20 @@ import os
 import random
 import torch
 import numpy as np
+import time
 import yaml
+import shutil
+from tensorboardX import SummaryWriter
 from stsgcn.models import ZeroVelocity, STSGCN
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
+
+
+def get_logger(cfg):
+    log_dir = cfg["log_dir"]
+    experiment_time = cfg["experiment_time"]
+    logger = SummaryWriter(os.path.join(log_dir, experiment_time))
+    return logger
 
 
 def get_model(cfg):
@@ -78,18 +88,27 @@ def mpjpe_error(batch_pred, batch_gt):
 def read_config(config_path):
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
+    cfg["experiment_time"] = str(int(time.time()))
+    os.makedirs(os.path.join(cfg["log_dir"], cfg["experiment_time"]), exist_ok=True)
+    config_file_name = config_path.split("/")[-1]
+    shutil.copyfile(config_path, os.path.join(cfg["log_dir"], cfg["experiment_time"], config_file_name))
+
     if cfg["dataset"] == "amass_3d":
         cfg["joints_to_consider"] = 18
         cfg["skip_rate"] = 1
+        cfg["loss_function"] = "mpjpe"
     # elif cfg["dataset"] == "3dpw":
     #     cfg["joints_to_consider"] = 18
     #     cfg["skip_rate"] = 1
+    #     cfg["loss_function"] = "mpjpe"
     # elif cfg["dataset"] == "h36m_ang":
     #     cfg["joints_to_consider"] = 16
     #     cfg["skip_rate"] = 5
+    #     cfg["loss_function"] == "angular"
     elif cfg["dataset"] == "h36m_3d":
         cfg["joints_to_consider"] = 22
         cfg["skip_rate"] = 5
+        cfg["loss_function"] = "mpjpe"
     else:
         raise Exception("Not a valid dataset.")
     return cfg
@@ -97,10 +116,18 @@ def read_config(config_path):
 
 def save_model(model, cfg):
     print("Saving the best model...")
-    os.makedirs(cfg["checkpoints_dir"], exist_ok=True)
+    checkpoints_dir = os.path.join(cfg["log_dir"], cfg["experiment_time"])
     torch.save(
-        model.state_dict(), os.path.join(cfg["checkpoints_dir"], model.model_name)
+        model.state_dict(), os.path.join(checkpoints_dir, "best_model")
     )
+
+
+def load_model(cfg):
+    checkpoints_dir = os.path.join(cfg["log_dir"], cfg["experiment_time"])
+    model = get_model(cfg)
+    model.load_state_dict(torch.load(os.path.join(checkpoints_dir, "best_model")))
+    return model
+
 
 def set_seeds(cfg):
     np.random.seed(cfg["seed"])

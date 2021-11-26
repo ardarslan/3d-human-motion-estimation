@@ -40,8 +40,6 @@ class STSGCN(nn.Module):
         self.output_time_frame = cfg["output_n"]
         self.st_gcnns = nn.ModuleList()
         self.input_channels = cfg["input_dim"]
-        self.input_time_frame = cfg["input_n"]
-        self.output_time_frame = cfg["output_n"]
         self.st_gcnn_dropout = cfg["st_gcnn_dropout"]
         self.n_txcnn_layers = cfg["n_tcnn_layers"]
         self.txc_kernel_size = cfg["tcnn_kernel_size"]
