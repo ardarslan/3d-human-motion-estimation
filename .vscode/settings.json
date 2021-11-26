@@ -1,5 +1,5 @@
 {
-	"python.pythonPath": "~/conda_root/envs/dlproject/bin/python3",
+	"python.pythonPath": "$SCRATCH/miniconda3/envs/dlproject/bin/python3",
 	"python.formatting.provider": "black",
 	"editor.tabSize": 4,
 	"editor.insertSpaces": true,
