@@ -5,9 +5,6 @@ import pickle
 from stsgcn.data_utils import ang2joint, readCSVasFloat, find_indices_srnn, expmap2xyz_torch, find_indices_256
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, data_dir, input_n, output_n, skip_rate, body_model_dir, actions=None, split=0):
         pass
@@ -54,7 +51,7 @@ class Amass_3D_Dataset(Dataset):
         #                 ['BioMotionLab_NTroje']]
 
         skel = np.load(body_model_dir)  # load mean skeleton
-        p3d0 = torch.from_numpy(skel['p3d0']).float().to(device)
+        p3d0 = torch.from_numpy(skel['p3d0']).float()
         parents = skel['parents']
         parent = {}
         for i in range(len(parents)):
@@ -83,7 +80,7 @@ class Amass_3D_Dataset(Dataset):
                     fidxs = range(0, fn, sample_rate)
                     fn = len(fidxs)
                     poses = poses[fidxs]
-                    poses = torch.from_numpy(poses).float().to(device)
+                    poses = torch.from_numpy(poses).float()
                     poses = poses.reshape([fn, -1, 3])
                     # remove global rotation
                     poses[:, 0] = 0
@@ -260,7 +257,7 @@ class H36M_3D_Dataset(Dataset):
                         even_list = range(0, n, self.sample_rate)
                         num_frames = len(even_list)
                         the_sequence = np.array(the_sequence[even_list, :])
-                        the_sequence = torch.from_numpy(the_sequence).float().to(device)
+                        the_sequence = torch.from_numpy(the_sequence).float()
                         # remove global rotation and translation
                         the_sequence[:, 0:6] = 0
                         p3d = expmap2xyz_torch(the_sequence)
@@ -281,7 +278,7 @@ class H36M_3D_Dataset(Dataset):
 
                     num_frames1 = len(even_list)
                     the_sequence1 = np.array(the_sequence1[even_list, :])
-                    the_seq1 = torch.from_numpy(the_sequence1).float().to(device)
+                    the_seq1 = torch.from_numpy(the_sequence1).float()
                     the_seq1[:, 0:6] = 0
                     p3d1 = expmap2xyz_torch(the_seq1)
                     self.p3d[key] = p3d1.view(num_frames1, -1).data.numpy()
@@ -294,7 +291,7 @@ class H36M_3D_Dataset(Dataset):
 
                     num_frames2 = len(even_list)
                     the_sequence2 = np.array(the_sequence2[even_list, :])
-                    the_seq2 = torch.from_numpy(the_sequence2).float().to(device)
+                    the_seq2 = torch.from_numpy(the_sequence2).float()
                     the_seq2[:, 0:6] = 0
                     p3d2 = expmap2xyz_torch(the_seq2)
 
@@ -355,7 +352,7 @@ class DPW_3D_Dataset(Dataset):
             files.extend(filenames)
 
         skel = np.load(body_model_dir)
-        p3d0 = torch.from_numpy(skel['p3d0']).float().to(device)[:, :22]
+        p3d0 = torch.from_numpy(skel['p3d0']).float()[:, :22]
         parents = skel['parents']
         parent = {}
         for i in range(len(parents)):
@@ -377,7 +374,7 @@ class DPW_3D_Dataset(Dataset):
                     fidxs = range(0, fn, sample_rate)
                     fn = len(fidxs)
                     poses = poses[fidxs]
-                    poses = torch.from_numpy(poses).float().to(device)
+                    poses = torch.from_numpy(poses).float()
                     poses = poses.reshape([fn, -1, 3])
                     poses = poses[:, :-2]
                     # remove global rotation

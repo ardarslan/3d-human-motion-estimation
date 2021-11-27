@@ -3,9 +3,6 @@ import numpy as np
 from torch.autograd.variable import Variable
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
 def with_zeros(x):
     """
     Append a [0, 0, 0, 1] tensor to a [3, 4] tensor.
@@ -18,7 +15,7 @@ def with_zeros(x):
     """
     ones = torch.tensor(
         [[[0.0, 0.0, 0.0, 1.0]]], dtype=torch.float
-    ).expand(x.shape[0], -1, -1).to(x.device)
+    ).expand(x.shape[0], -1, -1)
     ret = torch.cat((x, ones), dim=1)
     return ret
 
@@ -60,12 +57,12 @@ def rodrigues(r):
     theta_dim = theta.shape[0]
     r_hat = r / theta
     cos = torch.cos(theta)
-    z_stick = torch.zeros(theta_dim, dtype=torch.float).to(r.device)
+    z_stick = torch.zeros(theta_dim, dtype=torch.float)
     m = torch.stack(
         (z_stick, -r_hat[:, 0, 2], r_hat[:, 0, 1], r_hat[:, 0, 2], z_stick,
          -r_hat[:, 0, 0], -r_hat[:, 0, 1], r_hat[:, 0, 0], z_stick), dim=1)
     m = torch.reshape(m, (-1, 3, 3))
-    i_cube = (torch.eye(3, dtype=torch.float).unsqueeze(dim=0) + torch.zeros((theta_dim, 3, 3), dtype=torch.float)).to(r.device)
+    i_cube = (torch.eye(3, dtype=torch.float).unsqueeze(dim=0) + torch.zeros((theta_dim, 3, 3), dtype=torch.float))
     A = r_hat.permute(0, 2, 1)
     dot = torch.matmul(A, r_hat)
     R = cos * i_cube + (1 - cos) * dot + torch.sin(theta) * m
@@ -220,7 +217,7 @@ def fkl_torch(angles, parent, offset, rotInd, expmapInd):
     """
     n = angles.data.shape[0]
     j_n = offset.shape[0]
-    p3d = Variable(torch.from_numpy(offset)).float().to(device).unsqueeze(0).repeat(n, 1, 1)
+    p3d = Variable(torch.from_numpy(offset)).float().unsqueeze(0).repeat(n, 1, 1)
     angles = angles[:, 3:].contiguous().view(-1, 3)
     R = expmap2rotmat_torch(angles).view(n, j_n, 3, 3)
     for i in np.arange(1, j_n):
@@ -428,7 +425,7 @@ def expmap2rotmat_torch(r):
     r1 = r1.view(-1, 3, 3)
     r1 = r1 - r1.transpose(1, 2)
     n = r1.data.shape[0]
-    R = torch.eye(3, 3).repeat(n, 1, 1).float().to(r.device) + torch.mul(
+    R = torch.eye(3, 3).repeat(n, 1, 1).float() + torch.mul(
         torch.sin(theta).unsqueeze(1).repeat(1, 9).view(-1, 3, 3), r1) + torch.mul(
         (1 - torch.cos(theta).unsqueeze(1).repeat(1, 9).view(-1, 3, 3)), torch.matmul(r1, r1))
     return R
