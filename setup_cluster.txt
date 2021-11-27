@@ -1,0 +1,50 @@
+# log in to Euler
+ssh {YOUR_ETH_USERNAME}@euler.ethz.ch
+
+# install Miniconda (only once)
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+chmod +x Miniconda3-latest-Linux-x86_64.sh
+./Miniconda3-latest-Linux-x86_64.sh
+!!! IMPORTANT !!! choose the following directory while installing: /cluster/scratch/{YOUR_ETH_USERNAME}/miniconda3
+rm -rf Miniconda3-latest-Linux-x86_64.sh
+Close your current terminal, open a new terminal and log in to Euler again
+
+# set up git credentials on Euler, download the repository, download the dataset (only once)
+ssh-keygen
+more /cluster/home/{YOUR_ETH_USERNAME}/.ssh/id_rsa.pub  (take the output and add it to your Github account/SSH keys)
+git clone git@github.com:ardarslan/3d-human-motion-synthesis.git
+mv 3d-human-motion-synthesis dlproject
+cd dlproject
+env2lmod
+module load gcc/6.3.0 cuda/10.1.243 cudnn/7.6.4 python_gpu/3.8.5 eth_proxy
+pip3 install gdown
+gdown --id 1_kWNjtcYVKlDp4l7U1-lCkvv4xzIsMTo
+unzip datasets.zip
+rm -rf datasets.zip
+
+# create conda environment (only once)
+cd dlproject
+conda env create -f environment.yml
+
+# update conda environment (if you change environment.yml)
+conda env update -f environment.yml
+
+# IMPORTANT: to avoid problems with tensorboard timeout issue
+Do not install PyTorch Profiler TensorBoard if your vs code asks you to install.
+
+# if you installed tensorboard by mistake:
+pip3 uninstall torch-tb-profiler
+
+# daily use
+ssh {YOUR_ETH_USERNAME}@euler.ethz.ch
+env2lmod
+module load gcc/6.3.0 cuda/10.1.243 cudnn/7.6.4 python_gpu/3.8.5 eth_proxy
+cd dlproject
+conda activate dlproject
+cd src/
+bsub -n 4 -W 4:00 -o logs -R "rusage[mem=4096, ngpus_excl_p=1]" python run.py
+
+# commands for the job submitted
+bjobs
+bpeek {PID}
+bkill {PID}
