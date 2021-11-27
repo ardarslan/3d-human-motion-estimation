@@ -233,7 +233,7 @@ def train(config_path):
 
     # test
     test_data_loader = get_data_loader(cfg, split=2)
-    model = load_model(cfg)
+    model = load_model(cfg).to(device)
     test_loss_dict = evaluation_step(model, cfg, test_data_loader, split=2)
     for loss_function, loss_value in test_loss_dict.items():
         logger.add_scalar(f"test/{loss_function}", loss_value, 1)

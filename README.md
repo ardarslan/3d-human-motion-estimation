@@ -58,5 +58,5 @@
 4. Submit the train/test/visualization task to GPU with the following command (indicated time necessary to reproduce results)
     ```bash
     cd src/
-    bsub -n 4 -W 4:00 -o ../output -R "rusage[mem=4096, ngpus_excl_p=1]" python run.py
+    bsub -n 6 -W 4:00 -o ../output -R "rusage[mem=4096, ngpus_excl_p=1]" python run.py
     ```
