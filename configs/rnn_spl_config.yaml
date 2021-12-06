@@ -1,0 +1,45 @@
+# data:
+data_dir: ../datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: h36m_3d  # amass_3d
+body_model_dir: ../body_models/smpl_skeleton.npz
+#input_n: 10  # number of model's input frames
+#output_n: 25  # number of model's output frames
+input_n: 120  # Debug if this is actually possible (2s)
+output_n: 24  # number of model's output frames (0.4s)
+input_dim: 66  # Input features per pose (3*22 for H3.6M, 3*18 for AMASS)
+output_dim: 66 # Output features per pose (3*22 for H3.6M, 3*18 for AMASS)
+output_joints: 22 # 22 for H3.6M, 18 for AMASS
+
+# model:
+model: rnnspl
+use_spl: 1  # 1 or 0
+dense_spl: 1 # dense (1) or sparse (0)
+input_dropout_rate: 0.1
+input_hidden_size: 256
+recurrent_cell: lstm # lstm or gru or rnn
+cell_size: 1024
+output_hidden_size: 64  # 64 for with SPL, 960 for without
+residual_velocity: true
+loss_type: pose_joint_sum # pose_joint_sum for SPL, or mpjpe for RNN
+
+# run:
+seed: 42
+mode: train  # train or test or viz.
+optimizer: adam
+n_epochs: 500  # number of epochs to train
+batch_size: 64  # batch size
+lr: 0.001  # Learning rate of the optimizer
+use_scheduler: True  # use a scheduler
+scheduler: expo_decay # expo_decay or multi_step_lr
+decay_every_steps: True # decay based on batch steps (true) or epochs (false)
+decay_every: 1000
+gamma: 0.98 # lr multiplied by gamma once in decay_every steps 
+weight_decay: 0.00001
+early_stop_patience: 40
+clip_grad: 1.0  # select max norm to clip gradients
+num_workers: 5  # 0 means use the same thread for preparing data
+log_dir: ../logs/
+
+# visualization:
+visualize_from: test  # train or val or test
+n_viz: 2  # Numbers of sequences to visualize for each action
