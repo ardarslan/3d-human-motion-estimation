@@ -12,15 +12,15 @@ output_joints: 22 # 22 for H3.6M, 18 for AMASS
 
 # model:
 model: rnnspl
-use_spl: 1  # 1 or 0
+use_spl: 0  # 1 or 0
 dense_spl: 1 # dense (1) or sparse (0)
 input_dropout_rate: 0.1
 input_hidden_size: 256
 recurrent_cell: lstm # lstm or gru or rnn
 cell_size: 1024
-output_hidden_size: 64  # 64 for with SPL, 960 for without
+output_hidden_size: 960  # 64 for with SPL, 960 for without
 residual_velocity: true
-loss_type: pose_joint_sum # pose_joint_sum for SPL, or mpjpe for RNN
+loss_type: mpjpe # pose_joint_sum for SPL, or mpjpe for RNN
 
 # run:
 seed: 42
