@@ -23,8 +23,8 @@ def train_step_amass(model, optimizer, scheduler, cfg, train_data_loader):
         current_batch_size = batch.shape[0]
         total_num_samples += current_batch_size
         
-        sequences_X = batch[:, :cfg["input_n"], :, :]  # (N, T, V, C)
-        sequences_y = batch[:, 1:cfg["input_n"] + cfg["output_n"], :, :]  # (N, T, V, C)
+        sequences_X = batch[:, :cfg["input_n"] + cfg["output_n"], :, :]  # (N, T, V, C)
+        sequences_y = batch[:, 1:cfg["input_n"] + cfg["output_n"]+1, :, :]  # (N, T, V, C)
         optimizer.zero_grad()
         sequences_yhat = model(sequences_X)  # (N, T, V, C)
         
@@ -121,15 +121,15 @@ def train_step_h36(model, optimizer, scheduler, cfg, train_data_loader):
         current_batch_size = batch.shape[0]
         total_num_samples += current_batch_size
         
-        sequences_X = batch[:, :cfg["input_n"], indices_to_predict].view(
-                            -1, cfg["input_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
-        sequences_y = batch[:, 1:cfg["input_n"]+cfg["output_n"], indices_to_predict].view(
-                            -1, cfg["input_n"]+cfg["output_n"]-1, len(indices_to_predict) // 3, 3)  # (N, T, V, C)
+        sequences_X = batch[:, :cfg["input_n"] + cfg["output_n"], indices_to_predict].view(
+                            -1, cfg["input_n"] + cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
+        sequences_y = batch[:, 1:cfg["input_n"] + cfg["output_n"]+1, indices_to_predict].view(
+                            -1, cfg["input_n"] + cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
         
         optimizer.zero_grad()
         sequences_yhat = model(sequences_X)  # (N, T, V, C)
         if cfg["loss_type"] is None or cfg["loss_type"] == "mpjpe":
-            mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y)
+            mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y) * 1000
             total_loss = mpjpe_loss
             train_loss_dict.update({"mpjpe": mpjpe_loss.detach().cpu() * current_batch_size,
                                     "total": total_loss.detach().cpu() * current_batch_size})
@@ -184,7 +184,7 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
                 sequences_yhat = model(sequences_X)  # (N, T, V, C)
                 
                 if cfg["loss_type"] is None or cfg["loss_type"] == "mpjpe":
-                    mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y)
+                    mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y) * 1000
                     total_loss = mpjpe_loss
                 elif cfg["loss_type"] == "pose_joint_sum":
                     per_joint_loss = pose_joint_sum_error(sequences_yhat, sequences_y, seq_len=cfg["output_n"], num_joints=len(indices_to_predict)//3, dim_per_joint=3)
@@ -202,7 +202,7 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
                 sequences_yhat_all = sequences_yhat_all.view(-1, cfg["output_n"], 32, 3)
                 
                 if cfg["loss_type"] is None or cfg["loss_type"] == "mpjpe":
-                    mpjpe_loss = mpjpe_error(sequences_yhat_all, sequences_y)
+                    mpjpe_loss = mpjpe_error(sequences_yhat_all, sequences_y) * 1000
                     total_loss = mpjpe_loss
                 elif cfg["loss_type"] == "pose_joint_sum":
                     per_joint_loss = pose_joint_sum_error(sequences_yhat_all, sequences_y, seq_len=cfg["output_n"], num_joints=32, dim_per_joint=3)

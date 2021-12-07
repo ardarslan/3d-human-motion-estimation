@@ -119,8 +119,8 @@ class RNNSPL(nn.Module):
         self.use_spl = cfg["use_spl"]
         self.dense_spl = cfg["dense_spl"]
         
-        self.train_input_time_frame = cfg["input_n"]
-        self.train_output_time_frame = cfg["input_n"] + cfg["output_n"] - 1
+        self.train_input_time_frame = cfg["input_n"] + cfg["output_n"]
+        self.train_output_time_frame = cfg["input_n"] + cfg["output_n"]
         self.test_input_time_frame = cfg["input_n"]
         self.test_output_time_frame = cfg["output_n"]
         
@@ -136,9 +136,7 @@ class RNNSPL(nn.Module):
         self.input_dropout = nn.Dropout(p=self.input_dropout_rate)
         self.input_layer = nn.Linear(self.input_channels, self.input_hidden_size)
         
-        self.lstm = False
         if self.recurrent_cell == "lstm":
-            self.lstm = True
             self.rnn = nn.LSTMCell(self.input_hidden_size,self.cell_size)
         elif self.recurrent_cell == 'gru':
             self.rnn = nn.GRUCell(self.input_hidden_size,self.cell_size)
@@ -153,7 +151,7 @@ class RNNSPL(nn.Module):
                                     output_joints=self.output_joints,
                                     dense=self.dense_spl)
         else:
-            self.output_layer = nn.Sequential(nn.Linear(self.cell_size,self.output_hidden_size), nn.ReLU(), nn.Linear(self.output_hidden_size, self.output_channels))
+            self.output_layer = nn.Sequential([nn.Linear(self.cell_size,self.output_hidden_size), nn.ReLU(), nn.Linear(self.output_hidden_size, self.output_channels)])
         
     def forward(self, x):
         """ 
@@ -170,58 +168,35 @@ class RNNSPL(nn.Module):
             T_out: number of frames in the output sequence
             V: number of joints
         """
-        x = x.view(x.shape[0], x.shape[1], self.input_channels)
-        orig_x = x
+        x = x.view(x.shape[0], x.shape[1], self.input_dim)
         x = self.input_layer(self.input_dropout(x))
         
         if self.training:
             cur_x = x[:,0,:].squeeze(1)
-            if self.lstm:
-                h, c = self.rnn(cur_x)
-            else:
-                h = self.rnn(cur_x)
-            y = [self.output_layer(h) + orig_x[:,0,:].squeeze(1)]
+            h = self.rnn(cur_x)
+            y = [self.output_layer(h) + cur_x]
             
             for i in range(x.shape[1]-1):
                 cur_x = x[:,i+1,:].squeeze(1)
-                if self.lstm: 
-                    h, c = self.rnn(cur_x, (h, c))
-                else:
-                    h = self.rnn(cur_x, h)
-                y.append(self.output_layer(h) + orig_x[:,i+1,:].squeeze(1))
+                h = self.rnn(cur_x, h)
+                y.append(self.output_layer(h) + cur_x)
             
-            for i in range(self.test_output_time_frame-1):
-                cur_orig_x = y[-1]
-                cur_x = self.input_layer(self.input_dropout(cur_orig_x))
-                if self.lstm:
-                   h, c = self.rnn(cur_x, (h, c))
-                else:
-                   h = self.rnn(cur_x, h)
-                y.append(self.output_layer(h) + cur_orig_x)
-            y = torch.stack(y, dim=1).view(x.shape[0], self.train_output_time_frame, -1, 3)
+            y = y.view(x.shape[0], x.shape[1], -1, 3)
         
         else:
             cur_x = x[:,0,:].squeeze(1)
-            if self.lstm:
-                h, c = self.rnn(cur_x)
-            else:
-                h = self.rnn(cur_x)
+            h = self.rnn(cur_x)
             for i in range(x.shape[1]-1):
                 cur_x = x[:,i+1,:].squeeze(1)
-                if self.lstm:
-                    h, c = self.rnn(cur_x, (h, c))
-                else:
-                    h = self.rnn(cur_x, h)
+                h = self.rnn(cur_x, h)
                 
-            y = [self.output_layer(h) + orig_x[:,-1,:].squeeze(1)]
-            for i in range(self.test_output_time_frame-1):
-                cur_orig_x = y[-1]
-                cur_x = self.input_layer(self.input_dropout(cur_orig_x))
-                if self.lstm:
-                    h, c = self.rnn(cur_x, (h, c))
-                else:
-                    h = self.rnn(cur_x, h)
-                y.append(self.output_layer(h) + cur_orig_x)
+            cur_x = x[:,-1,:].squeeze(1)
+            all_y = []
+            for i in range(self.test_output_time_frame):
+                cur_x = y
+                h = self.rnn(cur_x, h)
+                y = self.output_layer(h) + cur_x
+                all_y.append(y)
             
-            y = torch.stack(y, dim=1).view(x.shape[0], self.test_output_time_frame, -1, 3)
+            y = all_y.view(x.shape[0], self.test_output_time_frame, -1, 3)
         return y
