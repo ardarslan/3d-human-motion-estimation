@@ -5,7 +5,7 @@ import numpy as np
 import time
 import yaml
 import shutil
-from stsgcn.models import ZeroVelocity, STSGCN, RNNSPL
+from stsgcn.models import ZeroVelocity, STSGCN
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
 
@@ -15,8 +15,6 @@ def get_model(cfg):
         model = ZeroVelocity(cfg)
     elif cfg["model"] == "stsgcn":
         model = STSGCN(cfg)
-    elif cfg["model"] == "rnnspl":
-        model = RNNSPL(cfg)
     else:
         raise Exception("Not implemented yet.")
     print(
@@ -38,8 +36,6 @@ def get_scheduler(cfg, optimizer):
         return torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=cfg["milestones"], gamma=cfg["gamma"]
         )
-    if cfg["scheduler"] == "expo_decay":
-        return torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=cfg["gamma"])
     else:
         raise Exception("Not implemented yet.")
 
@@ -80,10 +76,6 @@ def mpjpe_error(batch_pred, batch_gt):
     batch_gt = batch_gt.contiguous().view(-1, 3)
     return torch.mean(torch.norm(batch_gt - batch_pred, 2, 1))
 
-def pose_joint_sum_error(batch_pred, batch_gt):
-    diff = batch_pred - batch_gt
-    per_joint_loss = torch.sqrt(torch.sum(torch.square(diff), dim=-1))
-    return torch.mean(torch.sum(per_joint_loss, dim=-1))
 
 def read_config(config_path):
     with open(config_path, "r") as f:
