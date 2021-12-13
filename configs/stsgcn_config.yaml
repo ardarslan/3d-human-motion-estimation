@@ -1,6 +1,6 @@
 # data:
-data_dir: ../datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
-dataset: h36m_3d  # amass_3d
+data_dir: $SCRATCH/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: amass_3d  # amass_3d
 body_model_dir: ../body_models/smpl_skeleton.npz
 input_n: 10  # number of model's input frames
 output_n: 25  # number of model's output frames.

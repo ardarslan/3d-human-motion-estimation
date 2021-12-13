@@ -14,13 +14,16 @@ ssh-keygen
 more /cluster/home/{YOUR_ETH_USERNAME}/.ssh/id_rsa.pub  (take the output and add it to your Github account/SSH keys)
 git clone git@github.com:ardarslan/3d-human-motion-synthesis.git
 mv 3d-human-motion-synthesis dlproject
-cd dlproject
+cd $SCRATCH
 env2lmod
 module load gcc/6.3.0 cuda/10.1.243 cudnn/7.6.4 python_gpu/3.8.5 eth_proxy
-pip3 install gdown
-gdown --id 1_kWNjtcYVKlDp4l7U1-lCkvv4xzIsMTo
-unzip datasets.zip
-rm -rf datasets.zip
+pip3 install gshell
+gshell init
+gshell download --with-id 138U1dIxOERIEzYI6WB0jpEonumn7JUQ2 --recursive
+mv datasets dlproject_datasets
+cd dlproject_datasets/amass
+cat *.tar.bz2 | tar -ixjv
+rm -rf *.tar.bz2
 
 # create conda environment (only once)
 cd dlproject
