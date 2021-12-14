@@ -60,3 +60,6 @@
     cd src/
     bsub -n 6 -W 4:00 -o ../output -R "rusage[mem=4096, ngpus_excl_p=1]" python run.py
     ```
+
+
+Note: This repository borrows code from https://github.com/FraLuca/STSGCN
