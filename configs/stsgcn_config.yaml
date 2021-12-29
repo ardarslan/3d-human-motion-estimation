@@ -1,12 +1,12 @@
 # data:
-data_dir: $SCRATCH/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
-dataset: amass_3d  # amass_3d
+data_dir: /cluster/scratch/aarslan/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: amass_3d  # amass_3d  # amass_3d
 body_model_dir: ../body_models/smpl_skeleton.npz
-input_n: 10  # number of model's input frames
-output_n: 25  # number of model's output frames.
+input_n: 15  # number of model's input frames
+output_n: 45  # number of model's output frames.
 
-# model:
-model: stsgcn 
+# gen_model:
+gen_model: stsgcn
 n_stgcnn_layers: 9  # number of stgcnn layers
 n_ccnn_layers: 2  # number of layers for the Coordinate-Channel Convolution
 n_tcnn_layers: 4  # number of layers for the Time-Extrapolator Convolution
@@ -18,22 +18,38 @@ st_gcnn_dropout: 0.1  # st-gcnn dropout
 ccnn_dropout: 0.0  # ccnn dropout
 tcnn_dropout: 0.0  # tcnn dropout
 
+# disc_model:
+disc_model: motion_disc
+nz: 16
+rnn_type: gru
+nh_rnn: 256
+nh_mlp: [300, 150, 1]
+x_birnn: false
+e_birnn: false
+freqbasis: dct
+
 # run:
 mode: train  # choices=['train','test','viz']. Choose to train, test or visualize from the model. Either train, test or viz.
-optimizer: adam
-scheduler: multi_step_lr
+gen_optimizer: adam
+disc_optimizer: adam
+gen_scheduler: multi_step_lr
+disc_scheduler: multi_step_lr
 seed: 42
 n_epochs: 50  # number of epochs to train
-batch_size: 256  # batch size
+batch_size: 64  # batch size
 num_workers: 5  # 0 means use the same thread for preparing data
-lr: 0.01  # Learning rate of the optimizer
-weight_decay: 0.00001
+gen_lr: 0.01
+gen_weight_decay: 0.00001
+disc_lr: 0.01
+disc_weight_decay: 0.00001
+gen_disc_loss_weight: 0.0
 use_scheduler: True  # use MultiStepLR scheduler
-early_stop_patience: 5
-milestones: [15, 25, 35, 40]  # the epochs after which the learning rate is adjusted by gamma
-gamma: 0.1  # gamma correction to the learning rate, after reaching the milestone epochs
+early_stop_patience: 10
+gen_gamma: 0.25  # gamma correction to the learning rate, after reaching the milestone epochs
+disc_gamma: 0.25
 clip_grad: null  # select max norm to clip gradients
 log_dir: ../logs/
+print_train_loss_every_iter: 1000
 
 # visualization:
 visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).
