@@ -5,37 +5,62 @@ import numpy as np
 import time
 import yaml
 import shutil
-from stsgcn.models import ZeroVelocity, STSGCN
+import torch.nn as nn
+from torch.nn import functional as F
+from stsgcn.models import ZeroVelocity, STSGCN, VAEDCT, MotionDiscriminator
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
 
 
-def get_model(cfg):
-    if cfg["model"] == "zero_velocity":
-        model = ZeroVelocity(cfg)
-    elif cfg["model"] == "stsgcn":
-        model = STSGCN(cfg)
+def get_model(cfg, model_type):
+    model_name_model_mapping = {
+        "zero_velocity": ZeroVelocity,
+        "stsgcn": STSGCN,
+        "mojo": VAEDCT,
+        "motion_disc": MotionDiscriminator
+    }
+
+    if model_type == "gen":
+        model = model_name_model_mapping[cfg["gen_model"]](cfg)
+    elif model_type == "disc":
+        model = model_name_model_mapping[cfg["disc_model"]](cfg)
     else:
-        raise Exception("Not implemented yet.")
+        raise Exception("Not a valid model type.")
+
     print(
-        "Total number of parameters: "
+        f"Total number of parameters in {model_type} model: "
         + str(sum(p.numel() for p in model.parameters() if p.requires_grad))
     )
     return model
 
 
-def get_optimizer(cfg, model):
-    if cfg["optimizer"] == "adam":
-        return torch.optim.Adam(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
+def get_optimizer(cfg, model, model_type):
+    if model_type == "gen":
+        return torch.optim.Adam(model.parameters(), lr=cfg["gen_lr"], weight_decay=cfg["gen_weight_decay"])
+    elif model_type == "disc":
+        return torch.optim.Adam(model.parameters(), lr=cfg["disc_lr"], weight_decay=cfg["disc_weight_decay"])
     else:
-        raise Exception("Not implemented yet.")
+        raise Exception("Not a valid model type.")
 
 
-def get_scheduler(cfg, optimizer):
-    if cfg["scheduler"] == "multi_step_lr":
+def get_scheduler(cfg, optimizer, model_type):
+    scheduler_type = cfg[f"{model_type}_scheduler"]
+    if scheduler_type == "multi_step_lr":
+        n_epochs = cfg["n_epochs"]
+        milestone_interval = int(n_epochs / 5)
+        milestones = [i * milestone_interval for i in range(1, 5)]
+        if model_type == "gen":
+            gamma = cfg["gen_gamma"]
+        elif model_type == "disc":
+            gamma = cfg["disc_gamma"]
         return torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=cfg["milestones"], gamma=cfg["gamma"]
+            optimizer, milestones=milestones, gamma=gamma
         )
+    # elif cfg["scheduler"] == "lambda":
+    #     def lambda_rule(epoch):
+    #         lr_l = 1.0 - max(0, epoch - cfg["n_epoch_fix"]) / float(cfg["n_epochs"] - cfg["n_epoch_fix"] + 1)
+    #         return lr_l
+    #     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
     else:
         raise Exception("Not implemented yet.")
 
@@ -65,9 +90,9 @@ def get_data_loader(cfg, split, actions=None):
         batch_size=cfg["batch_size"],
         shuffle=(split != 2),
         num_workers=cfg["num_workers"],
-        pin_memory=True
+        pin_memory=True,
+        drop_last=True
     )
-
     return data_loader
 
 
@@ -75,6 +100,21 @@ def mpjpe_error(batch_pred, batch_gt):
     batch_pred = batch_pred.contiguous().view(-1, 3)
     batch_gt = batch_gt.contiguous().view(-1, 3)
     return torch.mean(torch.norm(batch_gt - batch_pred, 2, 1))
+
+
+def mojo_loss(X, Y_r, Y, mu, logvar, cfg):
+    MSE = F.l1_loss(Y_r, Y) + cfg["lambda_tf"] * F.l1_loss(Y_r[1:]-Y_r[:-1], Y[1:]-Y[:-1])
+    MSE_v = F.l1_loss(X[-1], Y_r[0])
+    KLD = 0.5 * torch.mean(-1 - logvar + mu.pow(2) + logvar.exp())
+    if cfg["robustkl"]:
+        KLD = torch.sqrt(1 + KLD**2)-1
+    loss_r = MSE + cfg["lambda_v"] * MSE_v + cfg["beta"] * KLD
+    return loss_r  # , np.array([loss_r.item(), MSE.item(), MSE_v.item(), KLD.item()])
+
+
+def discriminator_loss(y, yhat):
+    criterion = nn.BCEWithLogitsLoss()
+    return criterion(yhat, y)
 
 
 def read_config(config_path):
@@ -88,7 +128,8 @@ def read_config(config_path):
     if cfg["dataset"] == "amass_3d":
         cfg["joints_to_consider"] = 18
         cfg["skip_rate"] = 1
-        cfg["loss_function"] = "mpjpe"
+        cfg["nx"] = 54
+        cfg["ny"] = 54
     # elif cfg["dataset"] == "3dpw":
     #     cfg["joints_to_consider"] = 18
     #     cfg["skip_rate"] = 1
@@ -100,7 +141,8 @@ def read_config(config_path):
     elif cfg["dataset"] == "h36m_3d":
         cfg["joints_to_consider"] = 22
         cfg["skip_rate"] = 5
-        cfg["loss_function"] = "mpjpe"
+        cfg["nx"] = 66
+        cfg["ny"] = 66
     else:
         raise Exception("Not a valid dataset.")
     return cfg
@@ -116,7 +158,7 @@ def save_model(model, cfg):
 
 def load_model(cfg):
     checkpoints_dir = os.path.join(cfg["log_dir"], cfg["experiment_time"])
-    model = get_model(cfg)
+    model = get_model(cfg, "gen")
     model.load_state_dict(torch.load(os.path.join(checkpoints_dir, "best_model")))
     return model
 
