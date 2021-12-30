@@ -5,7 +5,7 @@ import numpy as np
 import time
 import yaml
 import shutil
-from stsgcn.models import ZeroVelocity, STSGCN
+from stsgcn.models import ZeroVelocity, STSGCN, STSGCN_transformer
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
 
@@ -15,6 +15,8 @@ def get_model(cfg):
         model = ZeroVelocity(cfg)
     elif cfg["model"] == "stsgcn":
         model = STSGCN(cfg)
+    elif cfg["model"] == "stsgcn_transformer":
+        model = STSGCN_transformer(cfg)
     else:
         raise Exception("Not implemented yet.")
     print(

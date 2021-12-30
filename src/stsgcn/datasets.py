@@ -250,7 +250,7 @@ class H36M_3D_Dataset(Dataset):
                 action = acts[action_idx]
                 if self.split <= 1:
                     for subact in [1, 2]:  # subactions
-                        print("Reading subject {0}, action {1}, subaction {2}".format(subj, action, subact))
+                        #print("Reading subject {0}, action {1}, subaction {2}".format(subj, action, subact))
                         filename = '{0}/S{1}/{2}_{3}.txt'.format(self.path_to_data, subj, action, subact)
                         the_sequence = readCSVasFloat(filename)
                         n, d = the_sequence.shape
@@ -270,7 +270,7 @@ class H36M_3D_Dataset(Dataset):
                         self.data_idx.extend(zip(tmp_data_idx_1, tmp_data_idx_2))
                         key += 1
                 else:
-                    print("Reading subject {0}, action {1}, subaction {2}".format(subj, action, 1))
+                    #print("Reading subject {0}, action {1}, subaction {2}".format(subj, action, 1))
                     filename = '{0}/S{1}/{2}_{3}.txt'.format(self.path_to_data, subj, action, 1)
                     the_sequence1 = readCSVasFloat(filename)
                     n, d = the_sequence1.shape
@@ -283,7 +283,7 @@ class H36M_3D_Dataset(Dataset):
                     p3d1 = expmap2xyz_torch(the_seq1)
                     self.p3d[key] = p3d1.view(num_frames1, -1).data.numpy()
 
-                    print("Reading subject {0}, action {1}, subaction {2}".format(subj, action, 2))
+                    #print("Reading subject {0}, action {1}, subaction {2}".format(subj, action, 2))
                     filename = '{0}/S{1}/{2}_{3}.txt'.format(self.path_to_data, subj, action, 2)
                     the_sequence2 = readCSVasFloat(filename)
                     n, d = the_sequence2.shape
