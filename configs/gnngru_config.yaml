@@ -1,0 +1,38 @@
+# data:
+data_dir: ../datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: h36m_3d  # amass_3d
+body_model_dir: ../body_models/smpl_skeleton.npz
+input_n: 50  # number of model's input frames
+output_n: 25  # number of model's output frames.
+
+# model:
+model: gnngru
+n_in_enc: 3
+n_hid_enc: 256
+n_in_dec: 9
+n_hid_dec: 256
+fusion_layer: 2
+cross_w: 0.3
+layout: 'h36m'
+
+
+# run:
+mode: train  # choices=['train','test','viz']. Choose to train, test or visualize from the model. Either train, test or viz.
+optimizer: adam
+scheduler: multi_step_lr
+seed: 42
+n_epochs: 50  # number of epochs to train
+batch_size: 32  # batch size
+num_workers: 5  # 0 means use the same thread for preparing data
+lr: 0.0001  # Learning rate of the optimizer (trying out 0.0001 - given in dmgnn)
+weight_decay: 0.0001
+use_scheduler: True  # use MultiStepLR scheduler
+early_stop_patience: 5
+milestones: [15, 25, 35, 40]  # the epochs after which the learning rate is adjusted by gamma
+gamma: 0.1  # gamma correction to the learning rate, after reaching the milestone epochs
+clip_grad: 0.5  # select max norm to clip gradients
+log_dir: ../logs/
+
+# visualization:
+visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).
+n_viz: 2  # Numbers of sequences to visualize for each action
