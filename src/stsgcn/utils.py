@@ -7,7 +7,7 @@ import yaml
 import shutil
 import torch.nn as nn
 from torch.nn import functional as F
-from stsgcn.models import ZeroVelocity, STSGCN, VAEDCT, MotionDiscriminator
+from stsgcn.models import ZeroVelocity, STSGCN, MotionDiscriminator
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
 
@@ -16,7 +16,6 @@ def get_model(cfg, model_type):
     model_name_model_mapping = {
         "zero_velocity": ZeroVelocity,
         "stsgcn": STSGCN,
-        "mojo": VAEDCT,
         "motion_disc": MotionDiscriminator
     }
 

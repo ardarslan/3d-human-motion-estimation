@@ -2,8 +2,8 @@
 data_dir: /cluster/scratch/aarslan/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
 dataset: amass_3d  # amass_3d  # amass_3d
 body_model_dir: ../body_models/smpl_skeleton.npz
-input_n: 15  # number of model's input frames
-output_n: 45  # number of model's output frames.
+input_n: 10  # number of model's input frames
+output_n: 25  # number of model's output frames.
 
 # gen_model:
 gen_model: stsgcn
@@ -19,35 +19,44 @@ ccnn_dropout: 0.0  # ccnn dropout
 tcnn_dropout: 0.0  # tcnn dropout
 
 # disc_model:
+# disc_model: motion_disc
+# nz: 16
+# rnn_type: gru
+# nh_rnn: 256
+# nh_mlp: [300, 150, 1]
+# x_birnn: false
+# e_birnn: false
+# freqbasis: dft
 disc_model: motion_disc
-nz: 16
-rnn_type: gru
-nh_rnn: 256
-nh_mlp: [300, 150, 1]
-x_birnn: false
-e_birnn: false
-freqbasis: dct
+# nz: 16
+# rnn_type: gru
+# nh_rnn: 256
+# nh_mlp: [300, 150, 1]
+# x_birnn: false
+# e_birnn: false
+# freqbasis: dft
 
 # run:
-mode: train  # choices=['train','test','viz']. Choose to train, test or visualize from the model. Either train, test or viz.
 gen_optimizer: adam
 disc_optimizer: adam
 gen_scheduler: multi_step_lr
 disc_scheduler: multi_step_lr
 seed: 42
-n_epochs: 50  # number of epochs to train
+n_epochs: 100  # number of epochs to train
 batch_size: 64  # batch size
 num_workers: 5  # 0 means use the same thread for preparing data
 gen_lr: 0.01
 gen_weight_decay: 0.00001
 disc_lr: 0.01
 disc_weight_decay: 0.00001
-gen_disc_loss_weight: 0.0
+gen_disc_loss_weight: 2.0
+start_training_discriminator_epoch: 10
 use_scheduler: True  # use MultiStepLR scheduler
 early_stop_patience: 10
-gen_gamma: 0.25  # gamma correction to the learning rate, after reaching the milestone epochs
-disc_gamma: 0.25
-clip_grad: null  # select max norm to clip gradients
+gen_gamma: 0.1  # gamma correction to the learning rate, after reaching the milestone epochs
+disc_gamma: 0.1
+gen_clip_grad: null  # select max norm to clip gradients
+disc_clip_grad: 1.0
 log_dir: ../logs/
 print_train_loss_every_iter: 1000
 
