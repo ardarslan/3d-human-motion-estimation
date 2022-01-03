@@ -120,18 +120,18 @@ class RNNSPL(nn.Module):
         self.dense_spl = cfg["dense_spl"]
         
         self.train_input_time_frame = cfg["input_n"]
-        self.train_output_time_frame = cfg["input_n"] + cfg["output_n"] - 1
         self.test_input_time_frame = cfg["input_n"]
+        self.train_output_time_frame = cfg["input_n"] + cfg["output_n"] - 1
+        #self.train_output_time_frame = cfg["output_n"]
         self.test_output_time_frame = cfg["output_n"]
         
         self.input_channels = cfg["input_dim"]
         self.output_channels = cfg["output_dim"]
-        self.output_joints = cfg["output_joints"]
+        self.output_joints = cfg["joints_to_consider"]
         self.input_dropout_rate = cfg["input_dropout_rate"]
         self.input_hidden_size = cfg["input_hidden_size"]
         self.cell_size = cfg["cell_size"]
         self.output_hidden_size = cfg["output_hidden_size"]
-        self.residual_velocity = cfg["residual_velocity"]
         
         self.input_dropout = nn.Dropout(p=self.input_dropout_rate)
         self.input_layer = nn.Linear(self.input_channels, self.input_hidden_size)
@@ -154,7 +154,19 @@ class RNNSPL(nn.Module):
                                     dense=self.dense_spl)
         else:
             self.output_layer = nn.Sequential(nn.Linear(self.cell_size,self.output_hidden_size), nn.ReLU(), nn.Linear(self.output_hidden_size, self.output_channels))
-        
+    
+    def call_recurrent_cell(self, x, h=None, c=None):
+        if self.lstm:
+            if h is None:
+                return self.rnn(x)
+            else:
+                return self.rnn(x, (h, c))
+        else:
+            if h is None:
+                return self.rnn(x), None
+            else:
+                return self.rnn(x, h), None
+    
     def forward(self, x):
         """ 
             Parameters:
@@ -176,51 +188,48 @@ class RNNSPL(nn.Module):
         
         if self.training:
             cur_x = x[:,0,:].squeeze(1)
-            if self.lstm:
-                h, c = self.rnn(cur_x)
-            else:
-                h = self.rnn(cur_x)
+            h, c = self.call_recurrent_cell(cur_x)
             y = [self.output_layer(h) + orig_x[:,0,:].squeeze(1)]
             
             for i in range(x.shape[1]-1):
                 cur_x = x[:,i+1,:].squeeze(1)
-                if self.lstm: 
-                    h, c = self.rnn(cur_x, (h, c))
-                else:
-                    h = self.rnn(cur_x, h)
+                h, c = self.call_recurrent_cell(cur_x, h, c)
                 y.append(self.output_layer(h) + orig_x[:,i+1,:].squeeze(1))
             
             for i in range(self.test_output_time_frame-1):
                 cur_orig_x = y[-1]
-                cur_x = self.input_layer(self.input_dropout(cur_orig_x))
-                if self.lstm:
-                   h, c = self.rnn(cur_x, (h, c))
-                else:
-                   h = self.rnn(cur_x, h)
+                cur_x = self.input_layer(cur_orig_x) #self.input_dropout(cur_orig_x))
+                h, c = self.call_recurrent_cell(cur_x, h, c)
                 y.append(self.output_layer(h) + cur_orig_x)
             y = torch.stack(y, dim=1).view(x.shape[0], self.train_output_time_frame, -1, 3)
-        
-        else:
+            '''
             cur_x = x[:,0,:].squeeze(1)
-            if self.lstm:
-                h, c = self.rnn(cur_x)
-            else:
-                h = self.rnn(cur_x)
+            h, c = self.call_recurrent_cell(cur_x)
+            
             for i in range(x.shape[1]-1):
                 cur_x = x[:,i+1,:].squeeze(1)
-                if self.lstm:
-                    h, c = self.rnn(cur_x, (h, c))
-                else:
-                    h = self.rnn(cur_x, h)
+                h, c = self.call_recurrent_cell(cur_x, h, c)
+            
+            y = [self.output_layer(h) + orig_x[:,-1,:].squeeze(1)]
+            for i in range(self.train_output_time_frame-1):
+                cur_orig_x = y[-1]
+                cur_x = self.input_layer(cur_orig_x) #self.input_dropout(cur_orig_x))
+                h, c = self.call_recurrent_cell(cur_x, h, c)
+                y.append(self.output_layer(h) + cur_orig_x)
+            y = torch.stack(y, dim=1).view(x.shape[0], self.train_output_time_frame, -1, 3)
+            '''
+        else:
+            cur_x = x[:,0,:].squeeze(1)
+            h, c = self.call_recurrent_cell(cur_x)
+            for i in range(x.shape[1]-1):
+                cur_x = x[:,i+1,:].squeeze(1)
+                h, c = self.call_recurrent_cell(cur_x, h, c)
                 
             y = [self.output_layer(h) + orig_x[:,-1,:].squeeze(1)]
             for i in range(self.test_output_time_frame-1):
                 cur_orig_x = y[-1]
                 cur_x = self.input_layer(self.input_dropout(cur_orig_x))
-                if self.lstm:
-                    h, c = self.rnn(cur_x, (h, c))
-                else:
-                    h = self.rnn(cur_x, h)
+                h, c = self.call_recurrent_cell(cur_x, h, c)
                 y.append(self.output_layer(h) + cur_orig_x)
             
             y = torch.stack(y, dim=1).view(x.shape[0], self.test_output_time_frame, -1, 3)

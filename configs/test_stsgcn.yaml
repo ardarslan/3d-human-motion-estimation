@@ -1,0 +1,30 @@
+# data:
+body_model_dir: ../body_models/smpl_skeleton.npz
+data_dir: /cluster/scratch/gsenthi/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: amass_3d #h36m_3d #amass_3d
+input_n: 15  # number of model's input frames
+output_n: 45  # number of model's output frames
+checkpoints_dir: ../logs/sts_amass_15/
+
+# model:
+model: stsgcn
+n_stgcnn_layers: 9  # number of stgcnn layers
+n_ccnn_layers: 2  # number of layers for the Coordinate-Channel Convolution
+n_tcnn_layers: 4  # number of layers for the Time-Extrapolator Convolution
+ccnn_kernel_size: [1, 1]  # kernel for the C-CNN layers
+tcnn_kernel_size: [3, 3]  # kernel for the Time-Extrapolator CNN layers
+embedding_dim: 40  # dimensions for the coordinates of the embedding
+input_dim: 3  # dimensions of the input coordinates
+st_gcnn_dropout: 0.1  # st-gcnn dropout
+ccnn_dropout: 0.0  # ccnn dropout
+tcnn_dropout: 0.0  # tcnn dropout
+
+# run:
+mode: test
+seed: 42
+batch_size: 64
+num_workers: 5
+
+# visualization:
+visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).
+n_viz: 2  # Numbers of sequences to visualize for each action

@@ -1,0 +1,19 @@
+# data:
+body_model_dir: ../body_models/smpl_skeleton.npz
+data_dir: /cluster/scratch/gsenthi/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: amass_3d #h36m_3d #amass_3d
+input_n: 15  # number of model's input frames
+output_n: 45  # number of model's output frames
+
+checkpoints_dir: ../logs/1640098327/  # Dummy directory
+model: zero_velocity
+
+# run:
+mode: test
+seed: 42
+batch_size: 64
+num_workers: 5
+
+# visualization:
+visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).
+n_viz: 2  # Numbers of sequences to visualize for each action

@@ -199,7 +199,7 @@ def train(config_path):
     train_data_loader = get_data_loader(cfg, split=0)
     validation_data_loader = get_data_loader(cfg, split=1)
 
-    logger = SummaryWriter(os.path.join(cfg["log_dir"], cfg["experiment_time"]))
+    logger = SummaryWriter(os.path.join(cfg["log_dir"], cfg["exp_name"]))
 
     best_validation_loss = np.inf
     early_stop_counter = 0

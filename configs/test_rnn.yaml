@@ -1,0 +1,28 @@
+# data:
+body_model_dir: ../body_models/smpl_skeleton.npz
+data_dir: /cluster/scratch/gsenthi/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: amass_3d #h36m_3d #amass_3d
+input_n: 10  # 2s of input
+output_n: 25  # 0.4s of output
+checkpoints_dir: ../logs/rnn_amass_10
+
+# model:
+model: rnnspl
+use_spl: 0  # 1 or 0
+dense_spl: 1 # dense (1) or sparse (0)
+input_dropout_rate: 0.1
+input_hidden_size: 256
+recurrent_cell: lstm # lstm or gru or rnn
+cell_size: 1024
+output_hidden_size: 960  # 64 for with SPL, 960 for without
+loss_type: mpjpe # pose_joint_sum for SPL, or mpjpe for RNN
+
+# run:
+seed: 42
+mode: test  # train or test or viz.
+batch_size: 64
+num_workers: 5
+
+# visualization:
+visualize_from: test  # train or val or test
+n_viz: 2  # Numbers of sequences to visualize for each action

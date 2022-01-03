@@ -25,6 +25,7 @@ def train_step_amass(model, optimizer, scheduler, cfg, train_data_loader):
         
         sequences_X = batch[:, :cfg["input_n"], :, :]  # (N, T, V, C)
         sequences_y = batch[:, 1:cfg["input_n"] + cfg["output_n"], :, :]  # (N, T, V, C)
+        #sequences_y = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], :, :]
         optimizer.zero_grad()
         sequences_yhat = model(sequences_X)  # (N, T, V, C)
         
@@ -45,7 +46,7 @@ def train_step_amass(model, optimizer, scheduler, cfg, train_data_loader):
         if cfg["clip_grad"] is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["clip_grad"])
         optimizer.step()
-        if cfg["use_scheduler"] and cfg["decay_every_steps"] is not None and cfg["decay_every_steps"] and idx % 1000 == 0:
+        if cfg["use_scheduler"] and cfg["decay_every_steps"] is not None and cfg["decay_every_steps"] and (idx+1) % 1000 == 0:
             scheduler.step()
     for loss_function, loss_value in train_loss_dict.items():
         train_loss_dict[loss_function] = loss_value / total_num_samples
@@ -146,7 +147,7 @@ def train_step_h36(model, optimizer, scheduler, cfg, train_data_loader):
         if cfg["clip_grad"] is not None:
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["clip_grad"])
         optimizer.step()
-        if cfg["use_scheduler"] and cfg["decay_every_steps"] is not None and cfg["decay_every_steps"] and idx % 1000 == 0:
+        if cfg["use_scheduler"] and cfg["decay_every_steps"] is not None and cfg["decay_every_steps"] and (idx+1) % 1000 == 0:
             scheduler.step()
     for loss_function, loss_value in train_loss_dict.items():
         train_loss_dict[loss_function] = loss_value / total_num_samples
@@ -265,11 +266,13 @@ def train(config_path):
 
     if cfg["use_scheduler"]:
         scheduler = get_scheduler(cfg, optimizer)
+    else:
+        scheduler = None
 
     train_data_loader = get_data_loader(cfg, split=0)
     validation_data_loader = get_data_loader(cfg, split=1)
 
-    logger = SummaryWriter(os.path.join(cfg["log_dir"], cfg["experiment_time"]))
+    logger = SummaryWriter(os.path.join(cfg["log_dir"], cfg["exp_name"]))
 
     best_validation_loss = np.inf
     early_stop_counter = 0
@@ -279,7 +282,7 @@ def train(config_path):
         for loss_function, loss_value in train_loss_dict.items():
             logger.add_scalar(f"train/{loss_function}", loss_value, epoch)
         current_total_train_loss = train_loss_dict['total']
-
+        
         # validate
         validation_loss_dict = evaluation_step(model, cfg, validation_data_loader, split=1)
         for loss_function, loss_value in validation_loss_dict.items():
@@ -309,7 +312,6 @@ def train(config_path):
         logger.add_scalar(f"test/{loss_function}", loss_value, 1)
     current_total_test_loss = test_loss_dict['total']
     print(f"Test loss: {current_total_test_loss}")
-
 
 # def visualize(self):
 #     self.model.load_state_dict(
