@@ -5,7 +5,7 @@ import numpy as np
 import time
 import yaml
 import shutil
-from stsgcn.models import ZeroVelocity, STSGCN, RNNSPL
+from stsgcn.models import ZeroVelocity, STSGCN, RNNSPL, RNN_STSEncoder
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
 
@@ -17,6 +17,8 @@ def get_model(cfg):
         model = STSGCN(cfg)
     elif cfg["model"] == "rnnspl":
         model = RNNSPL(cfg)
+    elif cfg["model"] == "rnn_stsE":
+        model = RNN_STSEncoder(cfg)
     else:
         raise Exception("Not implemented yet.")
     print(

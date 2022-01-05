@@ -1,0 +1,38 @@
+exp_name: rnn_stsE_h36_10
+
+# data:
+body_model_dir: ../body_models/smpl_skeleton.npz
+data_dir: /cluster/scratch/gsenthi/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: h36m_3d #h36m_3d #amass_3d
+input_n: 10  # 0.4/2s of input
+output_n: 25  # ~1s of output
+
+# model:
+model: rnn_stsE
+recurrent_cell: lstm # lstm or gru or rnn
+input_hidden_size: 256
+cell_size: 1024
+output_hidden_size: 960  # 64 for with SPL, 960 for without
+input_dim: 3  # dimensions of the input coordinates
+st_gcnn_dropout: 0.1  # st-gcnn dropout
+
+# run:
+seed: 42
+mode: train  # train or test or viz.
+optimizer: adam
+n_epochs: 50  # number of epochs to train
+batch_size: 64  # batch size
+num_workers: 5  # 0 means use the same thread for preparing data
+lr: 0.0001  # Learning rate of the optimizer [Try 0.001 later also?]
+weight_decay: 0.00001
+use_scheduler: True  # use MultiStepLR scheduler
+scheduler: multi_step_lr
+early_stop_patience: 5
+milestones: [15, 25, 35, 40]  # the epochs after which the learning rate is adjusted by gamma
+gamma: 0.1  # gamma correction to the learning rate, after reaching the milestone epochs
+clip_grad: 1.0  # select max norm to clip gradients
+log_dir: ../logs/
+
+# visualization:
+visualize_from: test  # train or val or test
+n_viz: 2  # Numbers of sequences to visualize for each action

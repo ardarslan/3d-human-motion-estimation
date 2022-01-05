@@ -110,6 +110,93 @@ class STSGCN(nn.Module):
         x = x.permute(0, 1, 3, 2)  # (NTCV->NTVC)
         return x
 
+class RNN_STSEncoder(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.cfg = cfg
+        self.model_name = "rnn_stsE"
+        self.recurrent_cell = cfg["recurrent_cell"]
+        
+        self.input_time_frame = cfg["input_n"]
+        self.output_time_frame = cfg["output_n"]
+        
+        self.output_channels = self.input_channels = cfg["input_dim"]
+        self.input_joints = self.output_joints = cfg["joints_to_consider"]
+        self.st_gcnn_dropout = cfg["st_gcnn_dropout"]
+        self.rnn_input_size = cfg["input_hidden_size"]
+        self.context_out_size = self.input_time_frame*self.input_joints*self.input_channels
+        self.cell_size = cfg["cell_size"]
+        self.output_hidden_size = cfg["output_hidden_size"]
+        
+        self.st_gcnns = nn.Sequential(ST_GCNN_layer(self.input_channels, 64, [1, 1], 1, self.input_time_frame, self.input_joints, self.st_gcnn_dropout),
+                        ST_GCNN_layer(64, 32, [1, 1], 1, self.input_time_frame, self.input_joints, self.st_gcnn_dropout),
+                        ST_GCNN_layer(32, 64, [1, 1], 1, self.input_time_frame, self.input_joints, self.st_gcnn_dropout),
+                        ST_GCNN_layer(64, self.input_channels, [1, 1], 1, self.input_time_frame, self.input_joints, self.st_gcnn_dropout))
+        
+        self.input_layer = nn.Linear(self.input_channels*self.input_joints, self.rnn_input_size)
+        self.context_sizing_layer = nn.Linear(self.context_out_size, self.cell_size)
+        self.output_layer = nn.Sequential(nn.Linear(self.cell_size,self.output_hidden_size), nn.ReLU(), nn.Linear(self.output_hidden_size, self.output_channels*self.output_joints))
+        
+        self.lstm = False
+        if self.recurrent_cell == "lstm":
+            self.lstm = True
+            self.rnn = nn.LSTMCell(self.rnn_input_size, self.cell_size)
+        elif self.recurrent_cell == 'gru':
+            self.rnn = nn.GRUCell(self.rnn_input_size, self.cell_size)
+        elif self.recurrent_cell == 'rnn':
+            self.rnn = nn.RNNCell(self.rnn_input_size, self.cell_size)
+        else:
+            raise Exception("Unknown Recurrent Cell module")
+        
+    def call_recurrent_cell(self, x, h=None, c=None):
+        if self.lstm:
+            if h is None:
+                return self.rnn(x)
+            else:
+                return self.rnn(x, (h, c))
+        else:
+            if h is None:
+                return self.rnn(x), None
+            else:
+                return self.rnn(x, h), None
+                
+    def forward(self, x):
+        """ 
+            Parameters:
+            input (torch.tensor): Input motion sequence with shape (N, T_in, V, C)
+
+            Returns:
+            torch.tensor: Output motion sequence with shape (N, T_out, V, C)
+
+            N: number of sequences in the batch
+            in_channels: 3D joint coordinates or axis angle representations
+            out_channels: 3D joint coordinates or axis angle representations
+            T_in: number of frames in the input sequence
+            T_out: number of frames in the output sequence
+            V: number of joints
+        """
+        orig_x = x.view(x.shape[0], x.shape[1], self.input_channels*self.input_joints)
+        
+        x = x.permute(0, 3, 1, 2)  # (NTVC->NCTV)
+        x = self.st_gcnns(x)
+        
+        #x = x.permute(0, 2, 3, 1)  # (NCTV->NTVC)
+        
+        context = x.reshape(x.shape[0], self.input_time_frame*self.output_channels*self.output_joints) # (NCTV->NT*V*C)
+        context = self.context_sizing_layer(context)
+        
+        cur_x = orig_x[:,-1,:].squeeze(1)
+        h, c = self.call_recurrent_cell(self.input_layer(cur_x), context, context)
+        y = [self.output_layer(h) + cur_x]
+        
+        for i in range(self.output_time_frame-1):
+            cur_x = y[-1]
+            h, c = self.call_recurrent_cell(self.input_layer(cur_x), h, c)
+            y.append(self.output_layer(h) + cur_x)
+            
+        y = torch.stack(y, dim=1).view(x.shape[0], self.output_time_frame, -1, 3)
+        return y
+        
 class RNNSPL(nn.Module):
     def __init__(self, cfg):
         super().__init__()
