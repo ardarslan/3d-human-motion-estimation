@@ -45,15 +45,24 @@ def get_optimizer(cfg, model, model_type):
 def get_scheduler(cfg, optimizer, model_type):
     scheduler_type = cfg[f"{model_type}_scheduler"]
     if scheduler_type == "multi_step_lr":
-        n_epochs = cfg["n_epochs"]
-        milestone_interval = int(n_epochs / 5)
-        milestones = [i * milestone_interval for i in range(1, 5)]
+        # n_epochs = cfg["n_epochs"]
+        # milestone_interval = int(n_epochs / 5)
+        if model_type == "gen":
+            gamma = cfg["gen_gamma"]
+            milestones = cfg["gen_milestones"]
+        elif model_type == "disc":
+            gamma = cfg["disc_gamma"]
+            milestones = cfg["disc_milestones"]
+        return torch.optim.lr_scheduler.MultiStepLR(
+            optimizer, milestones=milestones, gamma=gamma
+        )
+    elif scheduler_type == "step_lr":
         if model_type == "gen":
             gamma = cfg["gen_gamma"]
         elif model_type == "disc":
             gamma = cfg["disc_gamma"]
-        return torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=milestones, gamma=gamma
+        return torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=1, gamma=gamma
         )
     # elif cfg["scheduler"] == "lambda":
     #     def lambda_rule(epoch):
@@ -112,7 +121,7 @@ def mojo_loss(X, Y_r, Y, mu, logvar, cfg):
 
 
 def discriminator_loss(y, yhat):
-    criterion = nn.BCEWithLogitsLoss()
+    criterion = nn.BCELoss()
     return criterion(yhat, y)
 
 

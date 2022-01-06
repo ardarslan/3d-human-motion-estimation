@@ -234,11 +234,12 @@ class MotionDiscriminator(nn.Module):
                 64, 1, [1, 1], 1, self.output_time_frame, self.joints_to_consider, self.st_gcnn_dropout
             )
         )
-
+        self.gaussian_noise_std = 0.1
         self.gru = nn.GRU(input_size=self.joints_to_consider, hidden_size=self.joints_to_consider, batch_first=False, num_layers=1, bidirectional=True)
         self.linear = nn.Linear(self.joints_to_consider * 2, self.joints_to_consider * 2)
         self.final_linear = nn.Linear(self.joints_to_consider * 2, 1)
         self.leaky_relu = nn.LeakyReLU()
+        self.sigmoid = nn.Sigmoid()
 
         # at this point, we must permute the dimensions of the gcn network, from (N,C,T,V) into (N,T,C,V)
         # self.txcnns.append(
@@ -252,6 +253,9 @@ class MotionDiscriminator(nn.Module):
         # self.prelus = nn.ModuleList()
         # for j in range(self.n_txcnn_layers):
         #     self.prelus.append(nn.PReLU())
+    
+    def add_gaussian_noise(self, inputs, gaussian_noise_std):
+        return inputs + gaussian_noise_std * torch.randn_like(inputs)
 
     def forward(self, y):
         """ 
@@ -269,7 +273,10 @@ class MotionDiscriminator(nn.Module):
         V: number of joints
         """
 
+        y = self.add_gaussian_noise(y, self.gaussian_noise_std)
+
         y = y.permute(0, 3, 1, 2)  # (NTVC->NCTV)
+
         for gcn in self.st_gcnns:
             y = gcn(y)
         y = y[:, 0, :, :]  # (NCTV->NTV)
@@ -281,6 +288,7 @@ class MotionDiscriminator(nn.Module):
         y = self.leaky_relu(self.linear(y)) + y  # (N, 2*self.joints_to_consider)
         y = self.leaky_relu(self.linear(y)) + y  # (N, 2*self.joints_to_consider)
         y = self.final_linear(y)  # (N, 1)
+        y = self.sigmoid(y)
         return y
 
         # y = y.permute(0, 2, 1, 3)  # (NCTV->NTCV)
