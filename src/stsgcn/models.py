@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from stsgcn.layers import ST_GCNN_layer, CNN_layer, transformer_decoder_layer
+from stsgcn.layers import ST_GCNN_layer, CNN_layer, transformer_decoder_layer, transformer_encoder_layer
 
 
 class ZeroVelocity(nn.Module):
@@ -117,7 +117,6 @@ class STSGCN(nn.Module):
         return x
     
     
-    
 class STSGCN_transformer(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -132,8 +131,6 @@ class STSGCN_transformer(nn.Module):
         self.n_txcnn_layers = cfg["n_tcnn_layers"]
         self.txc_kernel_size = cfg["tcnn_kernel_size"]
         self.txc_dropout = cfg["tcnn_dropout"]
-        self.n_head = cfg["n_head"]
-        self.num_layers = cfg["num_layers"]
         self.bias = True
 
         self.st_gcnns.append(
@@ -157,12 +154,18 @@ class STSGCN_transformer(nn.Module):
         )
 
         # at this point, we must permute the dimensions of the gcn network, from (N,C,T,V) into (N,T,C,V)
+        self.gru_hidden_size = 512
+        self.gru_cell = nn.GRUCell(
+            input_size=self.cfg['input_dim'] * self.joints_to_consider, hidden_size=self.gru_hidden_size)
 
-        self.tr_decoder = transformer_decoder_layer(self.joints_to_consider * cfg['input_dim'],self.n_head, self.num_layers)
-        # consider adding non-linearity somewhere here!
+        self.linear = nn.Linear(
+            in_features=self.gru_hidden_size *2, out_features=self.cfg['input_dim'] * self.joints_to_consider)
+
+        self.multihead_attn = nn.MultiheadAttention(embed_dim = self.gru_hidden_size, num_heads = 4, batch_first = True, kdim = self.cfg['input_dim'] * self.joints_to_consider, vdim = self.cfg['input_dim'] * self.joints_to_consider)
+        self.conv_lin = nn.Linear(in_features = self.cfg['input_dim'] * self.joints_to_consider, out_features= self.gru_hidden_size)
         
 
-    def forward(self, x, tgt, tgt_mask):
+    def forward(self, x,y = None):
         """ 
             Parameters:
             input (torch.tensor): Input motion sequence with shape (N, T_in, V, C)
@@ -177,33 +180,64 @@ class STSGCN_transformer(nn.Module):
             T_out: number of frames in the output sequence
             V: number of joints
         """
-
+        raw_x = x
+        
+        if y != None: #train
+            y = y.permute(0, 3, 1, 2)
+            y = y.permute(0, 2, 1, 3)
+            y = y.transpose(2,3).reshape(y.shape[0],self.output_time_frame,-1) #[256,10,66]
+        
+        
         x = x.permute(0, 3, 1, 2)  # (NTVC->NCTV)
-
+        raw_x = raw_x.permute(0, 3, 1, 2)
+        
+        #encoder part
         for gcn in self.st_gcnns:
             x = gcn(x)
-
-        x = x.permute(0, 2, 1, 3)  # prepare the input for the Time-Extrapolator-CNN (NCTV->NTCV)
         
-        # memory is the encoder output
-        memory = x.transpose(2,3).reshape(tgt.shape[0],self.input_time_frame,-1)
+        x = x.permute(0, 2, 1, 3) # prepare the input for the Time-Extrapolator-CNN (NCTV->NTCV)
+        raw_x = raw_x.permute(0, 2, 1, 3)
+        
 
-        pred = self.tr_decoder(tgt, memory, tgt_mask)
+        # raw_x is raw joint locations, x is encoder output
+        x = x.transpose(2,3).reshape(x.shape[0],self.input_time_frame,-1) #[256,10,66]
+        raw_x = raw_x.transpose(2,3).reshape(x.shape[0],self.input_time_frame,-1) #[256,10,66]
+        
+
+
+        # decoder part
+        out = torch.zeros(x.shape[0], self.cfg["output_n"],self.cfg['input_dim'] * self.joints_to_consider).to(x.device) #[256,25,66]
+        h_ = self.conv_lin(x[:,-1,:])
+        
+        temp_pred = None
+        for j in range(0, self.cfg["output_n"]):
+            if j == 0:
+                h_ = self.gru_cell(raw_x[:, -1, :],h_)
+                
+                attn_output, _ = self.multihead_attn(query = torch.unsqueeze(h_, 1), key = x, value = x)
+                att_vector = torch.cat((h_,attn_output.squeeze()),1)
+                # residual connection
+                temp_pred = self.linear(att_vector) + raw_x[:, -1, :]
+                out[:, j, :] = temp_pred
+            else:
+                if y != None: # train
+                    h_ = self.gru_cell(y[:, j-1, :],h_)
+                    attn_output, _ = self.multihead_attn(query = torch.unsqueeze(h_, 1), key = x, value = x)
+                    att_vector = torch.cat((h_,attn_output.squeeze()),1)     
+                    # residual connection
+                    temp_pred = self.linear(att_vector) + y[:, j-1, :]
+                    out[:, j, :] = temp_pred
+
+                else: # valid
+                    h_ = self.gru_cell(temp_pred,h_)
+                    attn_output, _ = self.multihead_attn(query = torch.unsqueeze(h_, 1), key = x, value = x)
+                    att_vector = torch.cat((h_,attn_output.squeeze()),1)     
+                    # residual connection
+                    temp_pred = self.linear(att_vector) + temp_pred
+                    out[:, j, :] = temp_pred
         
         #reshape pred suitable to pipeline
-        pred = pred.view(tgt.shape[0],-1,self.cfg['input_dim'],self.joints_to_consider)
+        pred = out.view(x.shape[0],-1,self.cfg['input_dim'],self.joints_to_consider)
         
         pred = pred.permute(0, 1, 3, 2)  # (NTCV->NTVC)
         return pred
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    

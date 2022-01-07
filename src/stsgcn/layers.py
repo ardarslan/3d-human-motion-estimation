@@ -173,7 +173,6 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
     
     
-    
 class transformer_decoder_layer(nn.Module): 
     def __init__(self, d_model, n_head, num_layers):
         super(transformer_decoder_layer, self).__init__()
@@ -184,8 +183,21 @@ class transformer_decoder_layer(nn.Module):
     def forward(self, tgt, memory, tgt_mask):
         # tgt and memory shape: (batch_size, sequence_len, embedding_size):[256,25,66]
         # tgt_mask.shape : [25,25]
-        tgt = self.pos_encoder(tgt)
+        #tgt = self.pos_encoder(tgt)
         
         return self.transformer_decoder(tgt, memory, tgt_mask)
     
 
+class transformer_encoder_layer(nn.Module): 
+    def __init__(self, d_model, n_head, num_layers):
+        super(transformer_encoder_layer, self).__init__()
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=n_head, batch_first=True)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers=num_layers)
+        self.pos_encoder = PositionalEncoding(d_model=d_model)
+
+    def forward(self, src,src_mask):
+        # tgt and memory shape: (batch_size, sequence_len, embedding_size):[256,25,66]
+        # tgt_mask.shape : [25,25]
+        #src = self.pos_encoder(src)
+        
+        return self.transformer_encoder(src,src_mask)

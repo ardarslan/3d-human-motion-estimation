@@ -83,6 +83,8 @@ def train_step_h36(model, optimizer, cfg, train_data_loader):
     total_num_samples = 0
     model.train()
     train_loss_dict = Counter()
+    
+    del_counter = 0
     for batch in train_data_loader:
         batch = batch.float().to(device)  # (N, T, V, C)
         current_batch_size = batch.shape[0]
@@ -90,15 +92,26 @@ def train_step_h36(model, optimizer, cfg, train_data_loader):
         sequences_X = batch[:, 0:cfg["input_n"], indices_to_predict].view(-1, cfg["input_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
         sequences_y = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
         optimizer.zero_grad()
-
-        # specific to model type stsgcn_transformer
-        if cfg['model'] == 'stsgcn_transformer':
-            tgt = sequences_y.transpose(2,3).reshape(sequences_X.shape[0],cfg['output_n'],-1).to(device)
-            tgt_mask = torch.triu(torch.ones(cfg['output_n'],cfg['output_n']) == 1, diagonal = 1).to(device)
-            sequences_yhat = model(sequences_X,tgt,tgt_mask)  # (N, T, V, C)
-        else: # for any other model
-            sequences_yhat = model(sequences_X)  # (N, T, V, C)
+        '''
+        zeroth_dim = torch.normal(0, 0.5, size=(sequences_X.shape[0],sequences_X.shape[2],sequences_X.shape[3]))   
+        for i in range(sequences_X.shape[1]):
+            sequences_X[:,i,:,:] = zeroth_dim + i + 1
+        for j in range(sequences_y.shape[1]):
+            sequences_y[:,j,:,:] = zeroth_dim + j + 1 + sequences_X.shape[1]
+        '''
+        
+        #sequences_yhat = model(sequences_X)  # (N, T, V, C)
+        sequences_yhat = model(sequences_X,sequences_y)  # (N, T, V, C)
             
+        '''
+        if del_counter <2:
+            print('ground truth')
+            print(sequences_y[0,:,0,0])
+            print('prediction')
+            print(sequences_yhat[0,:,0,0])
+            del_counter += 1
+        '''
+        
         mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y)
         total_loss = mpjpe_loss
         total_loss.backward()
@@ -129,6 +142,8 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
         total_num_samples_current_action = 0
         eval_loss_dict = {}
         eval_loss_dict_valid = Counter()
+        
+        del_counter = 0
         for batch in eval_data_loader:
             batch = batch.float().to(device)
             current_batch_size = batch.shape[0]
@@ -136,29 +151,28 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
             if split == 1:  # validation
                 sequences_X = batch[:, 0:cfg["input_n"], indices_to_predict].view(-1, cfg["input_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
                 sequences_y = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
-                
-                # specific to model type stsgcn_transformer, do it autoregressive manner
-                if cfg['model'] == 'stsgcn_transformer':
-                    #sos token
-                    src = sequences_X.transpose(2,3).reshape(sequences_X.shape[0],cfg['input_n'],-1).to(device)
-                    tgt = src[:,-1:,:]
-                    tgt_mask = torch.triu(torch.ones(1,1) == 1, diagonal = 1).to(device)
-
-                    for _ in range(cfg["output_n"]):
-
-                        temp_pred = model(sequences_X,tgt,tgt_mask)  # (N, T, V, C)
-                        temp_pred = temp_pred.transpose(2,3).reshape(sequences_X.shape[0],tgt.shape[1],-1).to(device)
-                        # take the last element of prediction and append to the already predicted ones.
-                        tgt = torch.cat((tgt,temp_pred[:,-1:,:]),dim=1).to(device)
-                        tgt_mask = torch.triu(torch.ones(tgt.shape[1],tgt.shape[1]) == 1, diagonal = 1).to(device)
-
-                    pred = tgt[:,1:,:]
-                    pred = pred.view(tgt.shape[0],cfg["output_n"],cfg['input_dim'],-1)
-                    sequences_yhat = pred.permute(0, 1, 3, 2)
-                else:
-                    sequences_yhat = model(sequences_X)  # (N, T, V, C)
+                '''
+                zeroth_dim = torch.normal(0, 0.5, size=(sequences_X.shape[0],sequences_X.shape[2],sequences_X.shape[3]))
+                for i in range(sequences_X.shape[1]):
+                    sequences_X[:,i,:,:] = zeroth_dim + i + 1
+                for j in range(sequences_y.shape[1]):
+                    sequences_y[:,j,:,:] = zeroth_dim + j + 1 + sequences_X.shape[1]
+                '''
                     
+                #sequences_yhat = model(sequences_X)  # (N, T, V, C)
+                sequences_yhat = model(sequences_X,sequences_y)  # (N, T, V, C)
+                    
+
+                if del_counter <1:
+                    print('ground truth')
+                    print(sequences_y[0,:,0,0])
+                    print('prediction')
+                    print(sequences_yhat[0,:,0,0])
+                    del_counter += 1
+                
+
                 mpjpe_loss = mpjpe_error(sequences_yhat, sequences_y)
+
                 total_loss = mpjpe_loss
                 eval_loss_dict_valid.update({"mpjpe": mpjpe_loss.detach().cpu() * current_batch_size,
                                    "total": total_loss.detach().cpu() * current_batch_size})
@@ -167,25 +181,11 @@ def evaluation_step_h36(model, cfg, eval_data_loader, split):
                 sequences_X = batch[:, 0:cfg["input_n"], indices_to_predict].view(-1, cfg["input_n"], len(indices_to_predict) // 3, 3)
                 sequences_y = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], :].view(-1, cfg["output_n"], 32, 3)
                 
-                # specific to model type stsgcn_transformer
-                if cfg['model'] == 'stsgcn_transformer':
-                    #sos token
-                    src = sequences_X.transpose(2,3).reshape(sequences_X.shape[0],cfg['input_n'],-1).to(device)
-                    tgt = src[:,-1:,:]
-                    tgt_mask = torch.triu(torch.ones(1,1) == 1, diagonal = 1).to(device)
-
-                    for _ in range(cfg["output_n"]):
-
-                        temp_pred = model(sequences_X,tgt,tgt_mask)  # (N, T, V, C)
-                        temp_pred = temp_pred.transpose(2,3).reshape(sequences_X.shape[0],tgt.shape[1],-1).to(device)
-                        tgt = torch.cat((tgt,temp_pred[:,-1:,:]),dim=1).to(device)
-                        tgt_mask = torch.triu(torch.ones(tgt.shape[1],tgt.shape[1]) == 1, diagonal = 1).to(device)
-
-                    pred = tgt[:,1:,:]
-                    pred = pred.view(tgt.shape[0],cfg["output_n"],cfg['input_dim'],-1)
-                    sequences_yhat = pred.permute(0, 1, 3, 2)
-                else:
-                    sequences_yhat = model(sequences_X)  # (N, T, V, C)
+                #below is necessary for inputting to the model
+                sequences_y_model = batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
+                
+                #sequences_yhat = model(sequences_X)  # (N, T, V, C)
+                sequences_yhat = model(sequences_X,sequences_y_model)  # (N, T, V, C)
                 
                 
                 sequences_yhat_partial = sequences_yhat.contiguous().view(-1, cfg["output_n"], len(indices_to_predict))
@@ -263,31 +263,29 @@ def train(config_path):
     for epoch in range(cfg["n_epochs"]):
         # train
         train_loss_dict = train_step(model, optimizer, cfg, train_data_loader)
+
         for loss_function, loss_value in train_loss_dict.items():
             logger.add_scalar(f"train/{loss_function}", loss_value, epoch)
         current_total_train_loss = train_loss_dict['total']
 
         # validate
-        if cfg['model'] != 'stsgcn_transformer' or epoch % 3 == 0:
-            validation_loss_dict = evaluation_step(model, cfg, validation_data_loader, split=1)
-            for loss_function, loss_value in validation_loss_dict.items():
-                logger.add_scalar(f"validation/{loss_function}", loss_value, epoch)
-            current_total_validation_loss = validation_loss_dict['total']
+        validation_loss_dict = evaluation_step(model, cfg, validation_data_loader, split=1)
+        for loss_function, loss_value in validation_loss_dict.items():
+            logger.add_scalar(f"validation/{loss_function}", loss_value, epoch)
+        current_total_validation_loss = validation_loss_dict['total']
 
-            print(f"Epoch: {epoch} Train loss: {current_total_train_loss} Validation loss: {current_total_validation_loss}")
+        print(f"Epoch: {epoch} Train loss: {current_total_train_loss} Validation loss: {current_total_validation_loss}")
 
-            if current_total_validation_loss < best_validation_loss:
-                save_model(model, cfg)
-                best_validation_loss = current_total_validation_loss
-                early_stop_counter = 0
-            else:
-                early_stop_counter += 1
-
-            if early_stop_counter == cfg["early_stop_patience"]:
-                break
+        if current_total_validation_loss < best_validation_loss:
+            save_model(model, cfg)
+            best_validation_loss = current_total_validation_loss
+            early_stop_counter = 0
         else:
-            print(f"Epoch: {epoch} Train loss: {current_total_train_loss}")
-            
+            early_stop_counter += 1
+
+        if early_stop_counter == cfg["early_stop_patience"]:
+            break
+
         if cfg["use_scheduler"]:
             scheduler.step()
         
