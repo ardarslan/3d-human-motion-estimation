@@ -1,6 +1,6 @@
 # data:
-data_dir: $SCRATCH/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
-dataset: amass_3d  # amass_3d
+data_dir: /cluster/scratch/aarslan/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+dataset: h36m_3d  # amass_3d
 body_model_dir: ../body_models/smpl_skeleton.npz
 input_n: 10  # number of model's input frames
 output_n: 25  # number of model's output frames.
@@ -36,5 +36,4 @@ clip_grad: null  # select max norm to clip gradients
 log_dir: ../logs/
 
 # visualization:
-visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).
-n_viz: 2  # Numbers of sequences to visualize for each action
+n_viz: 5  # Numbers of sequences to visualize for each action

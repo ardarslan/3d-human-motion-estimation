@@ -7,6 +7,8 @@ from stsgcn.utils import get_model, read_config, get_optimizer, \
                          get_scheduler, get_data_loader, \
                          mpjpe_error, save_model, set_seeds, \
                          load_model
+from stsgcn.visualization.amass_3d_viz import visualize as amass_3d_visualize
+from stsgcn.visualization.h36m_3d_viz import visualize as h36m_3d_visualize
 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -240,20 +242,13 @@ def train(config_path):
     current_total_test_loss = test_loss_dict['total']
     print(f"Test loss: {current_total_test_loss}")
 
+    visualize(model, cfg)
 
-# def visualize(self):
-#     self.model.load_state_dict(
-#         torch.load(os.path.join(self.cfg['checkpoints_dir'], self.model_name))
-#     )
-#     self.model.eval()
-#     vis(
-#         self.cfg["input_n"],
-#         self.cfg["output_n"],
-#         self.cfg["visualize_from"],
-#         self.cfg["data_dir"],
-#         self.model,
-#         self.device,
-#         self.cfg["n_viz"],
-#         self.skip_rate,
-#         self.cfg["body_model_dir"]
-#     )
+
+def visualize(model, cfg):
+    if cfg["dataset"] == "amass_3d":
+        amass_3d_visualize(model, device, cfg)
+    elif cfg["dataset"] == "h36m_3d":
+        h36m_3d_visualize(model, device, cfg)
+    else:
+        raise NotImplementedError()
