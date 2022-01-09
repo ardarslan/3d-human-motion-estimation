@@ -133,6 +133,7 @@ class CNN_layer(
             (kernel_size[0] - 1) // 2,
             (kernel_size[1] - 1) // 2,
         )  # padding so that both dimensions are maintained
+            
         assert kernel_size[0] % 2 == 1 and kernel_size[1] % 2 == 1
 
         self.block = [

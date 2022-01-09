@@ -1,5 +1,4 @@
 import os
-import random
 import numpy as np
 import torch
 from collections import Counter
@@ -58,12 +57,12 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
         disc_preds_on_gen_samples = disc_prediction_on_generated_y.mean()
         disc_preds_on_real_samples = disc_prediction_on_real_y.mean()
 
-        coeff = cfg["batch_size"] * cfg["disc_gaussian_std_step_size"]
-        disc_gaussian_std_adjust = coeff * np.sign(disc_preds_on_real_samples.detach().cpu().numpy() - cfg["disc_real_prediction_target"])
-        disc_model.gaussian_noise_std = np.maximum(disc_model.gaussian_noise_std + disc_gaussian_std_adjust, 0)
+        # coeff = cfg["batch_size"] * cfg["disc_gaussian_std_step_size"]
+        # disc_gaussian_std_adjust = coeff * np.sign(disc_preds_on_real_samples.detach().cpu().numpy() - cfg["disc_real_prediction_target"])
+        # disc_model.gaussian_noise_std = np.maximum(disc_model.gaussian_noise_std + disc_gaussian_std_adjust, 0)
 
-        disc_loss_for_real_y = discriminator_loss(torch.ones_like(disc_prediction_on_real_y, dtype=torch.float, device=device), disc_prediction_on_real_y)
-        disc_loss_for_generated_y = discriminator_loss(torch.zeros_like(disc_prediction_on_generated_y, dtype=torch.float, device=device), disc_prediction_on_generated_y)
+        disc_loss_for_real_y = discriminator_loss(0.8 * torch.ones_like(disc_prediction_on_real_y, dtype=torch.float, device=device), disc_prediction_on_real_y)
+        disc_loss_for_generated_y = discriminator_loss(0.2 * torch.ones_like(disc_prediction_on_generated_y, dtype=torch.float, device=device), disc_prediction_on_generated_y)
         disc_total_loss = disc_loss_for_real_y + disc_loss_for_generated_y
         disc_total_loss.backward()
         if cfg["disc_clip_grad"] is not None:
@@ -74,7 +73,11 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
     gen_model.train()
     gen_model.zero_grad()
     gen_optimizer.zero_grad()
-    gen_sequences_yhat = gen_model(gen_sequences_X)  # (N, T, V, C)
+    if cfg["gen_model"] == "stsgcn":
+        gen_sequences_yhat = gen_model(gen_sequences_X, gen_sequences_real_y)  # (N, T, V, C)
+        gen_model.scheduled_sampling_target_number = 1.0 - ((epoch + 1) / cfg["n_epochs"])
+    else:
+        gen_sequences_yhat = gen_model(gen_sequences_X)  # (N, T, V, C)
     gen_mpjpe_loss = mpjpe_error(gen_sequences_yhat, gen_sequences_real_y) * 1000
 
     if epoch >= cfg["start_training_discriminator_epoch"]:
@@ -83,7 +86,7 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
         disc_optimizer.zero_grad()
         disc_sequences_generated_y = gen_model(disc_sequences_X).contiguous()
         disc_prediction_on_generated_y = disc_model(disc_sequences_generated_y)
-        gen_disc_loss = cfg["gen_disc_loss_weight"] * discriminator_loss(torch.ones_like(disc_prediction_on_generated_y, dtype=torch.float, device=device), disc_prediction_on_generated_y)
+        gen_disc_loss = cfg["gen_disc_loss_weight"] * discriminator_loss(0.8 * torch.ones_like(disc_prediction_on_generated_y, dtype=torch.float, device=device), disc_prediction_on_generated_y)
         if epoch >= cfg["start_feeding_discriminator_loss_epoch"]:
             gen_total_loss = gen_mpjpe_loss + gen_disc_loss
         else:
@@ -107,7 +110,7 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
             "disc_total": disc_total_loss.detach().cpu(),
             "disc_preds_on_gen_samples": disc_preds_on_gen_samples.detach().cpu(),
             "disc_preds_on_real_samples": disc_preds_on_real_samples.detach().cpu(),
-            "disc_gaussian_noise_std": disc_model.gaussian_noise_std
+           #  "disc_gaussian_noise_std": disc_model.gaussian_noise_std
         })
 
     return train_loss_dict
@@ -231,7 +234,7 @@ def train(config_path):
         disc_scheduler = get_scheduler(cfg, disc_optimizer, "disc")
 
     disc_train_data_loader = get_data_loader(cfg, split=0)
-    gen_train_data_loader = iter(get_data_loader(cfg, split=0))
+    gen_train_data_loader = get_data_loader(cfg, split=0)
     validation_data_loader = get_data_loader(cfg, split=1)
 
     logger = SummaryWriter(os.path.join(cfg["log_dir"], cfg["experiment_time"]))
@@ -240,10 +243,11 @@ def train(config_path):
     early_stop_counter = 0
     current_iteration = 0
     for epoch in range(cfg["n_epochs"]):
+        gen_train_data_loader_iter = iter(gen_train_data_loader)
         # train
         for disc_batch in disc_train_data_loader:
             disc_batch = disc_batch.float().to(device)
-            gen_batch = next(gen_train_data_loader).float().to(device)
+            gen_batch = next(gen_train_data_loader_iter).float().to(device)
             current_iteration += 1
             train_loss_dict = train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, disc_batch, epoch, cfg)
             for loss_function, loss_value in train_loss_dict.items():

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
-import scipy.io as sio
+import torch.nn.functional as F
 from stsgcn.torch_utils import zeros, batch_to
 from stsgcn.layers import ST_GCNN_layer, CNN_layer
 
@@ -44,11 +44,20 @@ class STSGCN(nn.Module):
         self.st_gcnns = nn.ModuleList()
         self.input_channels = cfg["input_dim"]
         self.st_gcnn_dropout = cfg["st_gcnn_dropout"]
-        self.n_txcnn_layers = cfg["n_tcnn_layers"]
-        self.txc_kernel_size = cfg["tcnn_kernel_size"]
-        self.txc_dropout = cfg["tcnn_dropout"]
+        # self.n_txcnn_layers = cfg["n_tcnn_layers"]
+        # self.txc_kernel_size = cfg["tcnn_kernel_size"]
+        # self.txc_dropout = cfg["tcnn_dropout"]
         self.bias = True
-        self.txcnns = nn.ModuleList()
+        # self.txcnns = nn.ModuleList()
+        self.scheduled_sampling_target_number = 1.0
+
+        self.h = cfg["n_attention_heads"]
+        self.d = self.joints_to_consider * self.input_channels
+        self.Wq = nn.Linear(self.d, self.d * self.h, bias=False)
+        self.Wk = nn.Linear(self.d, self.d * self.h, bias=False)
+        self.Wv = nn.Linear(self.d, self.d * self.h, bias=False)
+        self.gru = torch.nn.GRU(input_size=self.d, hidden_size=self.d, num_layers=1, bias=True, batch_first=True, bidirectional=True)
+        self.linear = nn.Linear(self.d * self.h, self.d)
 
         self.st_gcnns.append(
             ST_GCNN_layer(
@@ -71,22 +80,65 @@ class STSGCN(nn.Module):
         )
 
         # at this point, we must permute the dimensions of the gcn network, from (N,C,T,V) into (N,T,C,V)
-        self.txcnns.append(
-            CNN_layer(self.input_time_frame, self.output_time_frame, self.txc_kernel_size, self.txc_dropout)
-        )  # with kernel_size[3,3] the dimensinons of C,V will be maintained
-        for i in range(1, self.n_txcnn_layers):
-            self.txcnns.append(
-                CNN_layer(self.output_time_frame, self.output_time_frame, self.txc_kernel_size, self.txc_dropout)
-            )
+        # self.txcnns.append(
+        #     CNN_layer(self.input_time_frame, self.output_time_frame, self.txc_kernel_size, self.txc_dropout)
+        # )  # with kernel_size[3,3] the dimensinons of C,V will be maintained
+        # for i in range(1, self.n_txcnn_layers):
+        #     self.txcnns.append(
+        #         CNN_layer(self.output_time_frame, self.output_time_frame, self.txc_kernel_size, self.txc_dropout)
+        #     )
+        # self.prelus = nn.ModuleList()
+        # for j in range(self.n_txcnn_layers):
+        #     self.prelus.append(nn.PReLU())
 
-        self.prelus = nn.ModuleList()
-        for j in range(self.n_txcnn_layers):
-            self.prelus.append(nn.PReLU())
+    def make_prediction(self, x):
+        """
+        Adapted from: https://colab.research.google.com/github/leox1v/dl20/blob/master/Transformers_Solution.ipynb
 
-    def forward(self, x):
+        Args:
+            x: The input embedding of shape [b, l, d].
+
+        Returns:
+            yhat: Prediction for next timestep
+        """
+        b, l, d = x.size()
+        h = self.h
+
+        # Transform the input embeddings x of shape [b, l, d] to queries, keys, values.
+        # The output shape is [b, l, d*h] which we transform into [b, l, h, d]. Then,
+        # we fold the heads into the batch dimenstion to arrive at [b*h, l, d]
+        queries = self.Wq(x).view(b, l, h, d).transpose(1, 2).contiguous().view(b*h, l, d)
+        keys = self.Wk(x).view(b, l, h, d).transpose(1, 2).contiguous().view(b*h, l, d)
+        values = self.Wv(x).view(b, l, h, d).transpose(1, 2).contiguous().view(b*h, l, d)
+
+        # Compute the product of queries and keys and scale with sqrt(d).
+        # The tensor w has shape (b*h, l, l) containing normalized weights.
+        # ----------------
+        w = F.softmax(torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(d), dim=-1)
+        # ----------------
+        del queries, keys
+
+        # Apply the self attention to the values.
+        # Shape: [b*h, l, d]
+        # ----------------
+        x = torch.bmm(w, values)  # (b*h, l, d)
+        del values
+        # ----------------
+        _, x = self.gru(x)  # (2, b*h, d)
+        x = x.mean(dim=0)  # [b*h, d]
+        x = x.permute(1, 0)  # [d, b*h]
+        x = x.view(d, b, h)  # [d, b, h]
+        x = x.permute(1, 0, 2)  # [b, d, h]
+        x = x.contiguous().view(b, d*h)  # [b, d*h]
+        x = self.linear(x)  # [b, d]
+        x = x.unsqueeze(1)  # [b, 1, d]
+        return x
+
+    def forward(self, x, y=None):
         """ 
         Parameters:
-        input (torch.tensor): Input motion sequence with shape (N, T_in, V, C)
+        x (torch.tensor): Input motion sequence with shape (N, T_in, V, C)
+        y (torch.tensor): Label motion sequence with shape (N, T_out, V, C)  or  None
 
         Returns:
         torch.tensor: Output motion sequence with shape (N, T_out, V, C)
@@ -98,22 +150,39 @@ class STSGCN(nn.Module):
         T_out: number of frames in the output sequence
         V: number of joints
         """
+        N, T_in, V, C = x.shape
+        T_out = self.output_time_frame
 
         x = x.permute(0, 3, 1, 2)  # (NTVC->NCTV)
 
         for gcn in self.st_gcnns:
-            x = gcn(x)
+            x = gcn(x)  # NCTV
 
-        x = x.permute(0, 2, 1, 3)  # prepare the input for the Time-Extrapolator-CNN (NCTV->NTCV)
+        # x = x.permute(0, 2, 1, 3)  # prepare the input for the Time-Extrapolator-CNN (NCTV->NTCV)
 
-        x = self.prelus[0](self.txcnns[0](x))
+        # x = self.prelus[0](self.txcnns[0](x))
 
-        for i in range(1, self.n_txcnn_layers):
-            x = self.prelus[i](self.txcnns[i](x)) + x  # residual connection
-        x = x.permute(0, 1, 3, 2)  # (NTCV->NTVC)
+        # for i in range(1, self.n_txcnn_layers):
+        #     x = self.prelus[i](self.txcnns[i](x)) + x  # residual connection
+        # x = x.permute(0, 1, 3, 2)  # (NTCV->NTVC)
+        if y is not None:
+            y = y.view(N, T_out, V*C)
 
-        return x
-        # return torch.zeros_like(x)
+        x = x.permute(0, 2, 3, 1)  # (NCTV->NTVC)
+        x = x.contiguous().view(N, T_in, V*C)  # ( NTVC->NT(V*C) )
+        yhats = []
+        for i in range(T_out):
+            current_yhat = self.make_prediction(x)  # (N, 1, (V*C))
+            yhats.append(current_yhat)
+            random_number = np.random.rand()
+            if y is None or random_number > self.scheduled_sampling_target_number:  # feed predictions as input
+                new_frame = current_yhat.detach()
+            else:
+                new_frame = y[:, i, :].unsqueeze(1)
+            x = torch.cat([x, new_frame], dim=1)
+        yhats = torch.stack(yhats, dim=1)  # (N, T_out, (V*C))
+        yhats = yhats.view(N, T_out, V, C)  # (N, T_out, V, C)
+        return yhats
 
 
 class MLP(nn.Module):
@@ -206,56 +275,27 @@ class MotionDiscriminator(nn.Module):
         self.cfg = cfg
         self.input_time_frame = cfg["input_n"]
         self.output_time_frame = cfg["output_n"]
-        self.st_gcnns = nn.ModuleList()
         self.input_channels = cfg["input_dim"]
-        self.st_gcnn_dropout = cfg["st_gcnn_dropout"]
-        # self.n_txcnn_layers = cfg["n_tcnn_layers"]
-        # self.txc_kernel_size = cfg["tcnn_kernel_size"]
-        # self.txc_dropout = cfg["tcnn_dropout"]
-        # self.bias = True
-        # self.txcnns = nn.ModuleList()
+        self.n_txcnn_layers = cfg["n_tcnn_layers"]
+        self.txc_kernel_size = cfg["tcnn_kernel_size"]
+        self.txc_dropout = cfg["tcnn_dropout"]
+        self.txcnns = nn.ModuleList()
 
-        self.st_gcnns.append(
-            ST_GCNN_layer(
-                self.input_channels, 64, [1, 1], 1, self.output_time_frame, self.joints_to_consider, self.st_gcnn_dropout
-            )
-        )
-
-        self.st_gcnns.append(
-            ST_GCNN_layer(64, 32, [1, 1], 1, self.output_time_frame, self.joints_to_consider, self.st_gcnn_dropout)
-        )
-
-        self.st_gcnns.append(
-            ST_GCNN_layer(32, 64, [1, 1], 1, self.output_time_frame, self.joints_to_consider, self.st_gcnn_dropout)
-        )
-
-        self.st_gcnns.append(
-            ST_GCNN_layer(
-                64, 1, [1, 1], 1, self.output_time_frame, self.joints_to_consider, self.st_gcnn_dropout
-            )
-        )
-        self.gaussian_noise_std = 0.1
-        self.gru = nn.GRU(input_size=self.joints_to_consider, hidden_size=self.joints_to_consider, batch_first=False, num_layers=1, bidirectional=True)
-        self.linear = nn.Linear(self.joints_to_consider * 2, self.joints_to_consider * 2)
-        self.final_linear = nn.Linear(self.joints_to_consider * 2, 1)
         self.leaky_relu = nn.LeakyReLU()
         self.sigmoid = nn.Sigmoid()
+        self.linear = nn.Linear(self.joints_to_consider * 3, 1)
+        self.gaussian_noise_std = cfg["gaussian_noise_std"]
 
         # at this point, we must permute the dimensions of the gcn network, from (N,C,T,V) into (N,T,C,V)
-        # self.txcnns.append(
-        #     CNN_layer(self.input_time_frame, self.output_time_frame, self.txc_kernel_size, self.txc_dropout)
-        # )  # with kernel_size[3,3] the dimensinons of C,V will be maintained
-        # for i in range(1, self.n_txcnn_layers):
-        #     self.txcnns.append(
-        #         CNN_layer(self.output_time_frame, self.output_time_frame, self.txc_kernel_size, self.txc_dropout)
-        #     )
-
-        # self.prelus = nn.ModuleList()
-        # for j in range(self.n_txcnn_layers):
-        #     self.prelus.append(nn.PReLU())
+        self.txcnns.append(
+            CNN_layer(self.output_time_frame, self.output_time_frame, self.txc_kernel_size, self.txc_dropout)
+        )  # with kernel_size[3,3] the dimensions of C,V will be maintained
+        self.txcnns.append(
+            CNN_layer(self.output_time_frame, 1, self.txc_kernel_size, self.txc_dropout)
+        )
     
-    def add_gaussian_noise(self, inputs, gaussian_noise_std):
-        return inputs + gaussian_noise_std * torch.randn_like(inputs)
+    def add_gaussian_noise(self, y):
+        return y + self.gaussian_noise_std * torch.randn_like(y)
 
     def forward(self, y):
         """ 
@@ -272,34 +312,13 @@ class MotionDiscriminator(nn.Module):
         T_out: number of frames in the output sequence
         V: number of joints
         """
-
-        y = self.add_gaussian_noise(y, self.gaussian_noise_std)
-
-        y = y.permute(0, 3, 1, 2)  # (NTVC->NCTV)
-
-        for gcn in self.st_gcnns:
-            y = gcn(y)
-        y = y[:, 0, :, :]  # (NCTV->NTV)
-        y = y.permute(1, 0, 2)
-        _, y = self.gru(y)  # NTV
-        y = y.permute(1, 0, 2)  # (N, 2, self.joints_to_consider)
-        y = y.reshape(y.shape[0], -1)  # (N, 2*self.joints_to_consider)
-
-        y = self.leaky_relu(self.linear(y)) + y  # (N, 2*self.joints_to_consider)
-        y = self.leaky_relu(self.linear(y)) + y  # (N, 2*self.joints_to_consider)
-        y = self.final_linear(y)  # (N, 1)
-        y = self.sigmoid(y)
+        y = self.add_gaussian_noise(y)
+        y = y.permute(0, 1, 3, 2)  # (NTVC->NTCV)
+        y = self.leaky_relu(self.txcnns[0](y))  # (NTCV)
+        y = self.leaky_relu(self.txcnns[1](y))  # (N1CV)
+        y = y.view(y.shape[0], -1)  # (N, C*V)
+        y = self.sigmoid(self.linear(y))  # (N, 1)
         return y
-
-        # y = y.permute(0, 2, 1, 3)  # (NCTV->NTCV)
-
-        #   # prepare the input for the Time-Extrapolator-CNN (NCTV->NTCV)
-
-        # x = self.prelus[0](self.txcnns[0](x))
-
-        # for i in range(1, self.n_txcnn_layers):
-        #     x = self.prelus[i](self.txcnns[i](x)) + x  # residual connection
-        # x = x.permute(0, 1, 3, 2)  # (NTCV->NTVC)
 
 
 """
