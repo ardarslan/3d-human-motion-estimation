@@ -1,12 +1,12 @@
 # data:
 data_dir: /cluster/scratch/aarslan/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
 dataset: amass_3d  # h36m_3d
-body_model_dir: ../body_models/smpl_skeleton.npz
+body_model_dir: body_models/smpl_skeleton.npz
 input_n: 10  # number of model's input frames
 output_n: 25  # number of model's output frames.
 
 # gen_model:
-gen_model: stsgcn
+gen_model: stsgcn_attention
 n_stgcnn_layers: 9  # number of stgcnn layers
 # n_ccnn_layers: 2  # number of layers for the Coordinate-Channel Convolution
 
@@ -17,7 +17,7 @@ input_dim: 3  # dimensions of the input coordinates
 st_gcnn_dropout: 0.1  # st-gcnn dropout
 ccnn_dropout: 0.0  # ccnn dropout
 
-# n_attention_heads: 4
+n_attention_heads: 4
 
 # disc_model:
 # disc_model: motion_disc
@@ -51,10 +51,10 @@ batch_size: 256  # batch size
 num_workers: 5  # 0 means use the same thread for preparing data
 gen_lr: 0.01
 gen_weight_decay: 0.00001
-disc_lr: 0.01
+disc_lr: 0.0001
 disc_weight_decay: 0.00001
-gen_disc_loss_weight: 0.01
-# gaussian_noise_std: 0.01
+gen_disc_loss_weight: 0.1
+gaussian_noise_std: 1.0
 start_training_discriminator_epoch: 0
 start_feeding_discriminator_loss_epoch: 0
 # disc_gaussian_std_step_size: 0.001
@@ -67,7 +67,7 @@ disc_gamma: 0.1
 disc_milestones: [15, 25, 35, 40]
 gen_clip_grad: 10.0 # select max norm to clip gradients
 disc_clip_grad: 5.0
-log_dir: ../logs/
+log_dir: logs/
 print_train_loss_every_iter: 1000
 
 # visualization:

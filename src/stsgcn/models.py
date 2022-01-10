@@ -171,49 +171,6 @@ class STSGCN_Attention(nn.Module):
         # for j in range(self.n_txcnn_layers):
         #     self.prelus.append(nn.PReLU())
 
-    def make_prediction(self, x):
-        """
-        Adapted from: https://colab.research.google.com/github/leox1v/dl20/blob/master/Transformers_Solution.ipynb
-
-        Args:
-            x: The input embedding of shape [b, l, d].
-
-        Returns:
-            yhat: Prediction for next timestep
-        """
-        b, l, d = x.size()
-        h = self.h
-
-        # Transform the input embeddings x of shape [b, l, d] to queries, keys, values.
-        # The output shape is [b, l, d*h] which we transform into [b, l, h, d]. Then,
-        # we fold the heads into the batch dimenstion to arrive at [b*h, l, d]
-        queries = self.Wq(x).view(b, l, h, d).transpose(1, 2).contiguous().view(b*h, l, d)
-        keys = self.Wk(x).view(b, l, h, d).transpose(1, 2).contiguous().view(b*h, l, d)
-        values = self.Wv(x).view(b, l, h, d).transpose(1, 2).contiguous().view(b*h, l, d)
-
-        # Compute the product of queries and keys and scale with sqrt(d).
-        # The tensor w has shape (b*h, l, l) containing normalized weights.
-        # ----------------
-        w = F.softmax(torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(d), dim=-1)
-        # ----------------
-        del queries, keys
-
-        # Apply the self attention to the values.
-        # Shape: [b*h, l, d]
-        # ----------------
-        x = torch.bmm(w, values)  # (b*h, l, d)
-        del values
-        # ----------------
-        _, x = self.gru(x)  # (2, b*h, d)
-        x = x.mean(dim=0)  # [b*h, d]
-        x = x.permute(1, 0)  # [d, b*h]
-        x = x.view(d, b, h)  # [d, b, h]
-        x = x.permute(1, 0, 2)  # [b, d, h]
-        x = x.contiguous().view(b, d*h)  # [b, d*h]
-        x = self.linear(x)  # [b, d]
-        x = x.unsqueeze(1)  # [b, 1, d]
-        return x
-
     def forward(self, x, y=None):
         """ 
         Parameters:
@@ -250,26 +207,39 @@ class STSGCN_Attention(nn.Module):
 
         x = x.permute(0, 2, 3, 1)  # (NCTV->NTVC)
         x = x.contiguous().view(N, T_in, V*C)  # ( NTVC->NT(V*C) )
-        yhats = []
 
         h = self.h
         d = V*C
+        queries = self.Wq(x).view(N, T_in, h, V*C).transpose(1, 2).contiguous().view(N*h, T_in, d)  # (N*h, T_in, V*C)
         keys = self.Wk(x).view(N, T_in, h, V*C).transpose(1, 2).contiguous().view(N*h, T_in, d)  # (N*h, T_in, V*C)
         values = self.Wv(x).view(N, T_in, h, V*C).transpose(1, 2).contiguous().view(N*h, T_in, d)  # (N*h, T_in, V*C)
+        current_weights = F.softmax(torch.bmm(queries, keys.transpose(1, 2)) / np.sqrt(d), dim=-1)  # (N*h, T_in, T_in)
+        current_weighted_values = torch.bmm(current_weights, values).view(N*h, T_in, V*C)  # (N*h, T_in, V*C)
 
-        for i in range(T_out):
-            current_query = self.Wq(x[:, -1, :].unsqueeze(1)).view(N, 1, h, d).transpose(1, 2).contiguous().view(N*h, 1, d)  # (N*h, 1, V*C)
-            w = F.softmax(torch.bmm(current_query, keys.transpose(1, 2)) / np.sqrt(d), dim=-1)  # (N*h, 1, T_in)
-            current_yhat = torch.bmm(w, values)  # (N*h, 1, V*C)
+        yhats = []
+        _, current_hidden_state = self.gru(current_weighted_values)  # (2, N*h, V*C)
+        current_hidden_state_mean = current_hidden_state.mean(dim=0)  # (N*h, V*C)
+        current_yhat = self.linear(current_hidden_state_mean.view(N, h*V*C)) + x[:, -1, :]  # (N, V*C), residual connection
+        yhats.append(current_yhat)
 
-            current_yhat = self.make_prediction(x)  # (N, 1, (V*C))
-            yhats.append(current_yhat)
+        for i in range(T_out-1):
             random_number = np.random.rand()
             if y is None or random_number > self.scheduled_sampling_target_number:  # feed predictions as input
-                new_frame = current_yhat.detach()
+                current_input = current_yhat.unsqueeze(1).detach()  # (N, 1, V*C)
             else:
-                new_frame = y[:, i, :].unsqueeze(1)
-            x = torch.cat([x, new_frame], dim=1)
+                current_input = y[:, i, :].unsqueeze(1)  # (N, 1, V*C)
+            current_query = self.Wq(current_input).view(N, 1, h, V*C).transpose(1, 2).contiguous().view(N*h, 1, d)  # (N*h, 1, V*C)
+            current_key = self.Wk(current_input).view(N, 1, h, V*C).transpose(1, 2).contiguous().view(N*h, 1, d)  # (N*h, 1, V*C)
+            current_value = self.Wv(current_input).view(N, 1, h, V*C).transpose(1, 2).contiguous().view(N*h, 1, d)  # (N*h, 1, V*C)
+            current_weights = F.softmax(torch.bmm(current_query, keys.transpose(1, 2)) / np.sqrt(d), dim=-1)  # (N*h, 1, T)
+            current_weighted_value = torch.bmm(current_weights, values).view(N*h, 1, V*C)  # (N*h, 1, V*C)
+            _, current_hidden_state = self.gru(current_weighted_value, current_hidden_state)  # (2, N*h, V*C)
+            current_hidden_state_mean = current_hidden_state.mean(dim=0)  # (N*h, V*C)
+            current_yhat = self.linear(current_hidden_state_mean.view(N, h*V*C)) + current_yhat  # (N, V*C), residual connection
+            yhats.append(current_yhat)
+            keys = torch.cat([keys, current_key], dim=1)
+            values = torch.cat([values, current_value], dim=1)
+
         yhats = torch.stack(yhats, dim=1)  # (N, T_out, (V*C))
         yhats = yhats.view(N, T_out, V, C)  # (N, T_out, V, C)
         return yhats
@@ -374,7 +344,7 @@ class MotionDiscriminator(nn.Module):
         self.leaky_relu = nn.LeakyReLU()
         self.sigmoid = nn.Sigmoid()
         self.linear = nn.Linear(self.joints_to_consider * 3, 1)
-        # self.gaussian_noise_std = cfg["gaussian_noise_std"]
+        self.gaussian_noise_std = cfg["gaussian_noise_std"]
 
         # at this point, we must permute the dimensions of the gcn network, from (N,C,T,V) into (N,T,C,V)
         self.txcnns.append(
@@ -384,8 +354,8 @@ class MotionDiscriminator(nn.Module):
             CNN_layer(self.output_time_frame, 1, self.txc_kernel_size, self.txc_dropout)
         )
     
-    # def add_gaussian_noise(self, y):
-    #     return y + self.gaussian_noise_std * torch.randn_like(y)
+    def add_gaussian_noise(self, y):
+        return y + self.gaussian_noise_std * torch.randn_like(y)
 
     def forward(self, y):
         """ 
@@ -402,7 +372,7 @@ class MotionDiscriminator(nn.Module):
         T_out: number of frames in the output sequence
         V: number of joints
         """
-        # y = self.add_gaussian_noise(y)
+        y = self.add_gaussian_noise(y)
         y = y.permute(0, 1, 3, 2)  # (NTVC->NTCV)
         y = self.leaky_relu(self.txcnns[0](y))  # (NTCV)
         y = self.leaky_relu(self.txcnns[1](y))  # (N1CV)
