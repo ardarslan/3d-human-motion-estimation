@@ -1,11 +1,11 @@
-exp_name: rnn_amass_15
+exp_name: RNN_amass_10
 
 # data:
 body_model_dir: ../body_models/smpl_skeleton.npz
 data_dir: /cluster/scratch/gsenthi/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
 dataset: amass_3d #h36m_3d #amass_3d
-input_n: 15  # 0.4/2s of input
-output_n: 45  # ~1s of output
+input_n: 10  # 0.4/2s of input
+output_n: 25  # ~1s of output
 
 # model:
 model: rnnspl
@@ -13,7 +13,7 @@ use_spl: 0  # 1 or 0
 dense_spl: 1 # dense (1) or sparse (0)
 input_dropout_rate: 0.1
 input_hidden_size: 256
-recurrent_cell: lstm # lstm or gru or rnn
+recurrent_cell: rnn # lstm or gru or rnn
 cell_size: 1024
 output_hidden_size: 960  # 64 for with SPL, 960 for without
 loss_type: mpjpe # pose_joint_sum for SPL, or mpjpe for RNN

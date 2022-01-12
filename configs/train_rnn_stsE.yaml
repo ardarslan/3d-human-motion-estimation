@@ -1,15 +1,15 @@
-exp_name: rnn_stsE_h36_10
+exp_name: GRU_stsE_h36_10
 
 # data:
 body_model_dir: ../body_models/smpl_skeleton.npz
 data_dir: /cluster/scratch/gsenthi/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
-dataset: h36m_3d #h36m_3d #amass_3d
+dataset: h36m_3d #amass_3d
 input_n: 10  # 0.4/2s of input
 output_n: 25  # ~1s of output
 
 # model:
 model: rnn_stsE
-recurrent_cell: lstm # lstm or gru or rnn
+recurrent_cell: gru # lstm or gru or rnn
 input_hidden_size: 256
 cell_size: 1024
 output_hidden_size: 960  # 64 for with SPL, 960 for without
@@ -23,7 +23,7 @@ optimizer: adam
 n_epochs: 50  # number of epochs to train
 batch_size: 64  # batch size
 num_workers: 5  # 0 means use the same thread for preparing data
-lr: 0.0001  # Learning rate of the optimizer [Try 0.001 later also?]
+lr: 0.001  # Learning rate of the optimizer [Try 0.001 later also?]
 weight_decay: 0.00001
 use_scheduler: True  # use MultiStepLR scheduler
 scheduler: multi_step_lr

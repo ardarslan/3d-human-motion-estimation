@@ -4,18 +4,16 @@ data_dir: /cluster/scratch/gsenthi/dlproject_datasets/  # path to the unzipped d
 dataset: amass_3d #h36m_3d #amass_3d
 input_n: 10  # 2s of input
 output_n: 25  # 0.4s of output
-checkpoints_dir: ../logs/GRU_amass_10
+checkpoints_dir: ../logs/GRU_stsE_amass_10
 
 # model:
-model: rnnspl
-use_spl: 0  # 1 or 0
-dense_spl: 1 # dense (1) or sparse (0)
-input_dropout_rate: 0.1
-input_hidden_size: 256
+model: rnn_stsE
 recurrent_cell: gru # lstm or gru or rnn
+input_hidden_size: 256
 cell_size: 1024
 output_hidden_size: 960  # 64 for with SPL, 960 for without
-loss_type: mpjpe # pose_joint_sum for SPL, or mpjpe for RNN
+input_dim: 3  # dimensions of the input coordinates
+st_gcnn_dropout: 0.1  # st-gcnn dropout
 
 # run:
 seed: 42

@@ -1,0 +1,39 @@
+Sender: LSF System <lsfadmin@eu-g3-005>
+Subject: Job 200099197: <python test.py> in cluster <euler> Done
+
+Job <python test.py> was submitted from host <eu-login-10> by user <gsenthi> in cluster <euler> at Wed Jan 12 18:13:22 2022
+Job was executed on host(s) <4*eu-g3-005>, in queue <gpu.4h>, as user <gsenthi> in cluster <euler> at Wed Jan 12 18:13:53 2022
+</cluster/home/gsenthi> was used as the home directory.
+</cluster/home/gsenthi/dlproject/src> was used as the working directory.
+Started at Wed Jan 12 18:13:53 2022
+Terminated at Wed Jan 12 18:18:14 2022
+Results reported at Wed Jan 12 18:18:14 2022
+
+Your job looked like:
+
+------------------------------------------------------------
+# LSBATCH: User input
+python test.py
+------------------------------------------------------------
+
+Successfully completed.
+
+Resource usage summary:
+
+    CPU time :                                   315.00 sec.
+    Max Memory :                                 10318 MB
+    Average Memory :                             6719.45 MB
+    Total Requested Memory :                     16384.00 MB
+    Delta Memory :                               6066.00 MB
+    Max Swap :                                   -
+    Max Processes :                              8
+    Max Threads :                                28
+    Run time :                                   262 sec.
+    Turnaround time :                            292 sec.
+
+The output (if any) follows:
+
+Using device: cuda
+Loading BioMotionLab_NTroje...
+Total number of parameters: 5572364
+Test loss: 41.68423080444336
