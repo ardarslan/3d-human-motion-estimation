@@ -1,26 +1,19 @@
 # data:
-data_dir: /cluster/scratch/aarslan/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
-dataset: amass_3d  # h36m_3d
-body_model_dir: body_models/smpl_skeleton.npz
+# data_dir: /cluster/scratch/aarslan/dlproject_datasets/  # path to the unzipped dataset directories(H36m/AMASS/3DPW)
+# dataset: amass_3d  # h36m_3d
+body_model_dir: ../body_models/smpl_skeleton.npz
 input_n: 10  # number of model's input frames
-output_n: 25  # number of model's output frames.
+# output_n: 10  # number of model's output frames.
 
 # gen_model:
-gen_model: stsgcn_attention
+# gen_model: stsgcn
 n_stgcnn_layers: 9  # number of stgcnn layers
 # n_ccnn_layers: 2  # number of layers for the Coordinate-Channel Convolution
-
 # ccnn_kernel_size: [1, 1]  # kernel for the C-CNN layers
-
 embedding_dim: 40  # dimensions for the coordinates of the embedding
 input_dim: 3  # dimensions of the input coordinates
 st_gcnn_dropout: 0.1  # st-gcnn dropout
 ccnn_dropout: 0.0  # ccnn dropout
-
-n_attention_heads: 4
-
-# disc_model:
-# disc_model: motion_disc
 # nz: 16
 # rnn_type: gru
 # nh_rnn: 256
@@ -28,6 +21,7 @@ n_attention_heads: 4
 # x_birnn: false
 # e_birnn: false
 # freqbasis: dft
+
 disc_model: motion_disc
 tcnn_kernel_size: [3, 3]  # kernel for the Time-Extrapolator CNN layers
 n_tcnn_layers: 4  # number of layers for the Time-Extrapolator Convolution
@@ -51,10 +45,10 @@ batch_size: 256  # batch size
 num_workers: 5  # 0 means use the same thread for preparing data
 gen_lr: 0.01
 gen_weight_decay: 0.00001
-disc_lr: 0.0001
+disc_lr: 0.01
 disc_weight_decay: 0.00001
-gen_disc_loss_weight: 0.1
-gaussian_noise_std: 1.0
+gen_disc_loss_weight: 0.01
+# gaussian_noise_std: 1.0
 start_training_discriminator_epoch: 0
 start_feeding_discriminator_loss_epoch: 0
 # disc_gaussian_std_step_size: 0.001
@@ -65,11 +59,7 @@ gen_gamma: 0.1  # gamma correction to the learning rate, after each epoch
 gen_milestones: [15, 25, 35, 40]
 disc_gamma: 0.1
 disc_milestones: [15, 25, 35, 40]
-gen_clip_grad: 10.0 # select max norm to clip gradients
+# gen_clip_grad: null # select max norm to clip gradients
 disc_clip_grad: 5.0
-log_dir: logs/
+log_dir: ../logs/
 print_train_loss_every_iter: 1000
-
-# visualization:
-visualize_from: test  # ['train','val','test']. Choose data split to visualize from(train-val-test).
-n_viz: 2  # Numbers of sequences to visualize for each action

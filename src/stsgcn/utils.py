@@ -126,7 +126,7 @@ def discriminator_loss(y, yhat):
     return criterion(yhat, y)
 
 
-def read_config(config_path):
+def read_config(config_path, args):
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
     cfg["experiment_time"] = str(int(time.time()))
@@ -139,14 +139,6 @@ def read_config(config_path):
         cfg["skip_rate"] = 1
         cfg["nx"] = 54
         cfg["ny"] = 54
-    # elif cfg["dataset"] == "3dpw":
-    #     cfg["joints_to_consider"] = 18
-    #     cfg["skip_rate"] = 1
-    #     cfg["loss_function"] = "mpjpe"
-    # elif cfg["dataset"] == "h36m_ang":
-    #     cfg["joints_to_consider"] = 16
-    #     cfg["skip_rate"] = 5
-    #     cfg["loss_function"] == "angular"
     elif cfg["dataset"] == "h36m_3d":
         cfg["joints_to_consider"] = 22
         cfg["skip_rate"] = 5
@@ -154,6 +146,11 @@ def read_config(config_path):
         cfg["ny"] = 66
     else:
         raise Exception("Not a valid dataset.")
+
+    cfg["data_dir"] = args.data_dir
+    cfg["output_n"] = args.output_n
+    cfg["gen_clip_grad"] = args.gen_clip_grad
+    cfg["use_disc"] = args.use_disc
     return cfg
 
 

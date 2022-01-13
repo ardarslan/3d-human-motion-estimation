@@ -40,7 +40,7 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
         raise Exception("Not a valid dataset.")
 
     # train discriminator
-    if epoch >= cfg["start_training_discriminator_epoch"]:
+    if cfg["use_disc"] and epoch >= cfg["start_training_discriminator_epoch"]:
         disc_model.train()
         gen_model.eval()
         disc_model.zero_grad()
@@ -49,7 +49,10 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
         gen_optimizer.zero_grad()
 
         with torch.no_grad():
-            disc_sequences_generated_y = gen_model(disc_sequences_X, disc_sequences_real_y).detach().contiguous()  # (N, T, V, C)
+            if cfg["gen_model"] == "stsgcn_attention":
+                disc_sequences_generated_y = gen_model(disc_sequences_X, disc_sequences_real_y).detach().contiguous()  # (N, T, V, C)
+            else:
+                disc_sequences_generated_y = gen_model(disc_sequences_X).detach().contiguous()  # (N, T, V, C)
 
         disc_prediction_on_real_y = disc_model(disc_sequences_real_y)
         disc_prediction_on_generated_y = disc_model(disc_sequences_generated_y)
@@ -73,15 +76,23 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
     gen_model.train()
     gen_model.zero_grad()
     gen_optimizer.zero_grad()
-    gen_sequences_yhat = gen_model(gen_sequences_X, gen_sequences_real_y)  # (N, T, V, C)
-    gen_model.scheduled_sampling_target_number = 1.0 - ((epoch + 1) / cfg["n_epochs"])
+    if cfg["gen_model"] == "stsgcn_attention":
+        gen_sequences_yhat = gen_model(gen_sequences_X, gen_sequences_real_y)  # (N, T, V, C)
+        gen_model.scheduled_sampling_target_number = 1.0 - ((epoch + 1) / cfg["n_epochs"])
+    else:
+        gen_sequences_yhat = gen_model(gen_sequences_X)  # (N, T, V, C)
     gen_mpjpe_loss = mpjpe_error(gen_sequences_yhat, gen_sequences_real_y) * 1000
 
-    if epoch >= cfg["start_training_discriminator_epoch"]:
+    if cfg["use_disc"] and epoch >= cfg["start_training_discriminator_epoch"]:
         disc_model.train()
         disc_model.zero_grad()
         disc_optimizer.zero_grad()
-        disc_sequences_generated_y = gen_model(disc_sequences_X, disc_sequences_real_y).contiguous()
+
+        if cfg["gen_model"] == "stsgcn_attention":
+            disc_sequences_generated_y = gen_model(disc_sequences_X, disc_sequences_real_y).contiguous()  # (N, T, V, C)
+        else:
+            disc_sequences_generated_y = gen_model(disc_sequences_X).contiguous()  # (N, T, V, C)
+
         disc_prediction_on_generated_y = disc_model(disc_sequences_generated_y)
         gen_disc_loss = cfg["gen_disc_loss_weight"] * discriminator_loss(0.8 * torch.ones_like(disc_prediction_on_generated_y, dtype=torch.float, device=device), disc_prediction_on_generated_y)
         if epoch >= cfg["start_feeding_discriminator_loss_epoch"]:
@@ -99,7 +110,7 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
     train_loss_dict = {"gen_mpjpe": gen_mpjpe_loss.detach().cpu(),
                        "gen_total": gen_total_loss.detach().cpu()}
 
-    if epoch >= cfg["start_training_discriminator_epoch"]:
+    if cfg["use_disc"] and epoch >= cfg["start_training_discriminator_epoch"]:
         train_loss_dict.update({
             "gen_disc": gen_disc_loss.detach().cpu(),
             "disc_real": disc_loss_for_real_y.detach().cpu(),
@@ -109,7 +120,6 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
             "disc_preds_on_real_samples": disc_preds_on_real_samples.detach().cpu(),
            #  "disc_gaussian_noise_std": disc_model.gaussian_noise_std
         })
-
     return train_loss_dict
 
 
@@ -216,8 +226,8 @@ def evaluation_epoch(model, cfg, eval_data_loader, split):
     return eval_loss_dict
 
 
-def train(config_path):
-    cfg = read_config(config_path)
+def train(config_path, args):
+    cfg = read_config(config_path, args)
     set_seeds(cfg)
 
     gen_model = get_model(cfg, model_type="gen").to(device)
@@ -262,7 +272,7 @@ def train(config_path):
 
         if cfg["use_scheduler"]:
             gen_scheduler.step()
-            if epoch >= cfg["start_training_discriminator_epoch"]:
+            if cfg["use_disc"] and epoch >= cfg["start_training_discriminator_epoch"]:
                 disc_scheduler.step()
 
         if current_validation_mpjpe_loss < best_validation_loss:
