@@ -5,37 +5,73 @@ import numpy as np
 import time
 import yaml
 import shutil
-from stsgcn.models import ZeroVelocity, STSGCN
+import torch.nn as nn
+from torch.nn import functional as F
+from stsgcn.models import ZeroVelocity, STSGCN, MotionDiscriminator, RNN_STSEncoder, STSGCN_Transformer
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
+from pprint import pprint
 
 
-def get_model(cfg):
-    if cfg["model"] == "zero_velocity":
-        model = ZeroVelocity(cfg)
-    elif cfg["model"] == "stsgcn":
-        model = STSGCN(cfg)
+def get_model(cfg, model_type):
+    model_name_model_mapping = {
+        "zero_velocity": ZeroVelocity,
+        "stsgcn": STSGCN,
+        "motion_disc": MotionDiscriminator,
+        "rnn_stsE": RNN_STSEncoder,
+        "stsgcn_transformer": STSGCN_Transformer
+    }
+
+    if model_type == "gen":
+        model = model_name_model_mapping[cfg["gen_model"]](cfg)
+    elif model_type == "disc":
+        model = model_name_model_mapping[cfg["disc_model"]](cfg)
     else:
-        raise Exception("Not implemented yet.")
+        raise Exception("Not a valid model type.")
+
     print(
-        "Total number of parameters: "
+        f"Total number of parameters in {model_type} model: "
         + str(sum(p.numel() for p in model.parameters() if p.requires_grad))
     )
     return model
 
 
-def get_optimizer(cfg, model):
-    if cfg["optimizer"] == "adam":
-        return torch.optim.Adam(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
+def get_optimizer(cfg, model, model_type):
+    if model_type == "gen":
+        return torch.optim.Adam(model.parameters(), lr=cfg["gen_lr"], weight_decay=cfg["gen_weight_decay"])
+    elif model_type == "disc":
+        return torch.optim.Adam(model.parameters(), lr=cfg["disc_lr"], weight_decay=cfg["disc_weight_decay"])
     else:
-        raise Exception("Not implemented yet.")
+        raise Exception("Not a valid model type.")
 
 
-def get_scheduler(cfg, optimizer):
-    if cfg["scheduler"] == "multi_step_lr":
+def get_scheduler(cfg, optimizer, model_type):
+    scheduler_type = cfg[f"{model_type}_scheduler"]
+    if scheduler_type == "multi_step_lr":
+        # n_epochs = cfg["n_epochs"]
+        # milestone_interval = int(n_epochs / 5)
+        if model_type == "gen":
+            gamma = cfg["gen_gamma"]
+            milestones = cfg["gen_milestones"]
+        elif model_type == "disc":
+            gamma = cfg["disc_gamma"]
+            milestones = cfg["disc_milestones"]
         return torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=cfg["milestones"], gamma=cfg["gamma"]
+            optimizer, milestones=milestones, gamma=gamma
         )
+    elif scheduler_type == "step_lr":
+        if model_type == "gen":
+            gamma = cfg["gen_gamma"]
+        elif model_type == "disc":
+            gamma = cfg["disc_gamma"]
+        return torch.optim.lr_scheduler.StepLR(
+            optimizer, step_size=1, gamma=gamma
+        )
+    # elif cfg["scheduler"] == "lambda":
+    #     def lambda_rule(epoch):
+    #         lr_l = 1.0 - max(0, epoch - cfg["n_epoch_fix"]) / float(cfg["n_epochs"] - cfg["n_epoch_fix"] + 1)
+    #         return lr_l
+    #     return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
     else:
         raise Exception("Not implemented yet.")
 
@@ -65,9 +101,9 @@ def get_data_loader(cfg, split, actions=None):
         batch_size=cfg["batch_size"],
         shuffle=(split != 2),
         num_workers=cfg["num_workers"],
-        pin_memory=True
+        pin_memory=True,
+        drop_last=True
     )
-
     return data_loader
 
 
@@ -77,7 +113,22 @@ def mpjpe_error(batch_pred, batch_gt):
     return torch.mean(torch.norm(batch_gt - batch_pred, 2, 1))
 
 
-def read_config(config_path):
+def mojo_loss(X, Y_r, Y, mu, logvar, cfg):
+    MSE = F.l1_loss(Y_r, Y) + cfg["lambda_tf"] * F.l1_loss(Y_r[1:]-Y_r[:-1], Y[1:]-Y[:-1])
+    MSE_v = F.l1_loss(X[-1], Y_r[0])
+    KLD = 0.5 * torch.mean(-1 - logvar + mu.pow(2) + logvar.exp())
+    if cfg["robustkl"]:
+        KLD = torch.sqrt(1 + KLD**2)-1
+    loss_r = MSE + cfg["lambda_v"] * MSE_v + cfg["beta"] * KLD
+    return loss_r  # , np.array([loss_r.item(), MSE.item(), MSE_v.item(), KLD.item()])
+
+
+def discriminator_loss(y, yhat):
+    criterion = nn.BCELoss()
+    return criterion(yhat, y)
+
+
+def read_config(config_path, args):
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
     cfg["experiment_time"] = str(int(time.time()))
@@ -85,24 +136,33 @@ def read_config(config_path):
     config_file_name = config_path.split("/")[-1]
     shutil.copyfile(config_path, os.path.join(cfg["log_dir"], cfg["experiment_time"], config_file_name))
 
+    cfg["data_dir"] = args.data_dir
+    cfg["gen_model"] = args.gen_model
+    cfg["dataset"] = args.dataset
+    cfg["output_n"] = args.output_n
+    cfg["gen_clip_grad"] = args.gen_clip_grad
+    cfg["recurrent_cell"] = args.recurrent_cell
+    cfg["batch_size"] = args.batch_size
+    cfg["use_disc"] = args.use_disc
+    cfg["gen_lr"] = args.gen_lr
+    cfg["early_stop_patience"] = args.early_stop_patience
+    cfg["gen_gamma"] = args.gen_gamma
+    cfg["gen_milestones"] = args.gen_milestones
+
     if cfg["dataset"] == "amass_3d":
         cfg["joints_to_consider"] = 18
         cfg["skip_rate"] = 1
-        cfg["loss_function"] = "mpjpe"
-    # elif cfg["dataset"] == "3dpw":
-    #     cfg["joints_to_consider"] = 18
-    #     cfg["skip_rate"] = 1
-    #     cfg["loss_function"] = "mpjpe"
-    # elif cfg["dataset"] == "h36m_ang":
-    #     cfg["joints_to_consider"] = 16
-    #     cfg["skip_rate"] = 5
-    #     cfg["loss_function"] == "angular"
+        cfg["nx"] = 54
+        cfg["ny"] = 54
     elif cfg["dataset"] == "h36m_3d":
         cfg["joints_to_consider"] = 22
         cfg["skip_rate"] = 5
-        cfg["loss_function"] = "mpjpe"
+        cfg["nx"] = 66
+        cfg["ny"] = 66
     else:
         raise Exception("Not a valid dataset.")
+
+    pprint(cfg)
     return cfg
 
 
@@ -116,7 +176,7 @@ def save_model(model, cfg):
 
 def load_model(cfg):
     checkpoints_dir = os.path.join(cfg["log_dir"], cfg["experiment_time"])
-    model = get_model(cfg)
+    model = get_model(cfg, "gen")
     model.load_state_dict(torch.load(os.path.join(checkpoints_dir, "best_model")))
     return model
 

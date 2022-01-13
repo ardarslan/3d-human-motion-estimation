@@ -133,6 +133,7 @@ class CNN_layer(
             (kernel_size[0] - 1) // 2,
             (kernel_size[1] - 1) // 2,
         )  # padding so that both dimensions are maintained
+            
         assert kernel_size[0] % 2 == 1 and kernel_size[1] % 2 == 1
 
         self.block = [
@@ -146,3 +147,41 @@ class CNN_layer(
     def forward(self, x):
         output = self.block(x)
         return output
+
+
+class TransformerDecoderLayer(nn.Module):
+    def __init__(self, d_model, n_head, num_layers):
+        super(TransformerDecoderLayer, self).__init__()
+        self.decoder_layer = nn.TransformerDecoderLayer(d_model=d_model, nhead=n_head, batch_first=True)
+        self.transformer_decoder = nn.TransformerDecoder(self.decoder_layer, num_layers=num_layers)
+        self.pos_encoder = PositionalEncoding(d_model=d_model)
+
+    def forward(self, tgt, memory, tgt_mask):
+        # tgt and memory shape: (batch_size, sequence_len, embedding_size):[256,25,66]
+        # tgt_mask.shape : [25,25]
+        tgt = self.pos_encoder(tgt)
+        return self.transformer_decoder(tgt, memory, tgt_mask)
+
+
+class PositionalEncoding(nn.Module):
+    # borrowed from https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+    def __init__(self, d_model, dropout=0.1, max_len=5000):
+        super().__init__()
+        self.dropout = nn.Dropout(p=dropout)
+
+        position = torch.arange(max_len).unsqueeze(1)
+        div_term = torch.exp(torch.arange(0, d_model, 2) * (-math.log(10000.0) / d_model))
+        self.pe = torch.zeros(max_len, 1, d_model)
+        self.pe[:, 0, 0::2] = torch.sin(position * div_term)
+        self.pe[:, 0, 1::2] = torch.cos(position * div_term)
+
+    def forward(self, x):
+        """
+        Args:
+            x: Tensor, shape [seq_len, batch_size, embedding_dim]
+        """
+        self.pe = self.pe.to(x.device)
+        x = x.permute(1, 0, 2)
+        x = x + self.pe[:x.size(0)]
+        x = x.permute(1, 0, 2)
+        return self.dropout(x)
