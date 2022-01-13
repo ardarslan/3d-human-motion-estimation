@@ -65,7 +65,19 @@
     - Original STSGCN paper results:
 
     ```bash
-    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET --output_n OUTPUT_N --gen_model stsgcn --batch_size 256 --gen_lr 0.01 --early_stop_patience 10
+    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET
+    ```
+
+    - STSGCNEncoder + AttentionDecoder results:
+
+    ```bash
+    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET --output_n OUTPUT_N --gen_model stsgcn_transformer --gen_milestones 5 15 25 35 --gen_clip_grad 1.0
+    ```
+    
+    - STSGCNEncoder + RNNDecoder results:
+
+    ```bash
+    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET --output_n OUTPUT_N --gen_model rnn_stsE --batch_size 64 --gen_lr 0.001 --early_stop_patience 5 --gen_clip_grad 1.0 --recurrent_cell RECURRENT_CELL
     ```
 
     - STSGCN + MotionDisc results:
@@ -80,17 +92,17 @@
         ```bash
         bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset h36m_3d --output_n OUTPUT_N --gen_model stsgcn --use_disc
         ```
-    
-    - STSGCNEncoder + RNNDecoder results:
-
-    ```bash
-    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET --output_n OUTPUT_N --gen_model rnn_stsE --batch_size 64 --gen_lr 0.001 --early_stop_patience 5 --gen_clip_grad 1.0 --recurrent_cell RECURRENT_CELL
-    ```
 
     - STSGCNEncoder + RNNDecoder + MotionDisc results:
 
     ```bash
     bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET --output_n OUTPUT_N --gen_model rnn_stsE --batch_size 64 --gen_lr 0.001 --early_stop_patience 10 --gen_clip_grad 1.0 --recurrent_cell RECURRENT_CELL --use_disc
+    ```
+
+    - STSGCNEncoder + AttentionDecoder + MotionDisc results:
+
+    ```bash
+    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET --output_n OUTPUT_N --gen_model stsgcn_transformer --gen_milestones 5 15 25 35 --use_disc
     ```
 
     DATA_DIR should be the directory where the datasets are located.

@@ -7,16 +7,19 @@ import yaml
 import shutil
 import torch.nn as nn
 from torch.nn import functional as F
-from stsgcn.models import ZeroVelocity, STSGCN, MotionDiscriminator
+from stsgcn.models import ZeroVelocity, STSGCN, MotionDiscriminator, RNN_STSEncoder, STSGCN_Transformer
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
+from pprint import pprint
 
 
 def get_model(cfg, model_type):
     model_name_model_mapping = {
         "zero_velocity": ZeroVelocity,
         "stsgcn": STSGCN,
-        "motion_disc": MotionDiscriminator
+        "motion_disc": MotionDiscriminator,
+        "rnn_stsE": RNN_STSEncoder,
+        "stsgcn_transformer": STSGCN_Transformer
     }
 
     if model_type == "gen":
@@ -133,6 +136,19 @@ def read_config(config_path, args):
     config_file_name = config_path.split("/")[-1]
     shutil.copyfile(config_path, os.path.join(cfg["log_dir"], cfg["experiment_time"], config_file_name))
 
+    cfg["data_dir"] = args.data_dir
+    cfg["gen_model"] = args.gen_model
+    cfg["dataset"] = args.dataset
+    cfg["output_n"] = args.output_n
+    cfg["gen_clip_grad"] = args.gen_clip_grad
+    cfg["recurrent_cell"] = args.recurrent_cell
+    cfg["batch_size"] = args.batch_size
+    cfg["use_disc"] = args.use_disc
+    cfg["gen_lr"] = args.gen_lr
+    cfg["early_stop_patience"] = args.early_stop_patience
+    cfg["gen_gamma"] = args.gen_gamma
+    cfg["gen_milestones"] = args.gen_milestones
+
     if cfg["dataset"] == "amass_3d":
         cfg["joints_to_consider"] = 18
         cfg["skip_rate"] = 1
@@ -146,10 +162,7 @@ def read_config(config_path, args):
     else:
         raise Exception("Not a valid dataset.")
 
-    cfg["data_dir"] = args.data_dir
-    cfg["output_n"] = args.output_n
-    cfg["gen_clip_grad"] = args.gen_clip_grad
-    cfg["use_disc"] = args.use_disc
+    pprint(cfg)
     return cfg
 
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from stsgcn.torch_utils import zeros, batch_to
-from stsgcn.layers import ST_GCNN_layer, CNN_layer
+from stsgcn.layers import ST_GCNN_layer, CNN_layer, TransformerDecoderLayer
 
 
 class ZeroVelocity(nn.Module):
@@ -261,9 +261,9 @@ class RNN_STSEncoder(nn.Module):
         x = x.permute(0, 3, 1, 2)  # (NTVC->NCTV)
         x = self.st_gcnns(x)
 
-        #x = x.permute(0, 2, 3, 1)  # (NCTV->NTVC)
+        # x = x.permute(0, 2, 3, 1)  # (NCTV->NTVC)
 
-        context = x.reshape(x.shape[0], self.input_time_frame*self.output_channels*self.output_joints) # (NCTV->NT*V*C)
+        context = x.reshape(x.shape[0], self.input_time_frame*self.output_channels*self.output_joints)  # (NCTV->NT*V*C)
         context = self.context_sizing_layer(context)
 
         cur_x = orig_x[:, -1, :].squeeze(1)
@@ -277,6 +277,130 @@ class RNN_STSEncoder(nn.Module):
 
         y = torch.stack(y, dim=1).view(x.shape[0], self.output_time_frame, -1, 3)
         return y
+
+
+class STSGCN_Transformer(nn.Module):
+    def __init__(self, cfg):
+        super().__init__()
+        self.model_name = "stsgcn_transformer"
+        self.joints_to_consider = cfg["joints_to_consider"]
+        self.cfg = cfg
+        self.input_time_frame = cfg["input_n"]
+        self.output_time_frame = cfg["output_n"]
+        self.st_gcnns = nn.ModuleList()
+        self.input_channels = cfg["input_dim"]
+        self.st_gcnn_dropout = cfg["st_gcnn_dropout"]
+        self.n_txcnn_layers = cfg["n_tcnn_layers"]
+        self.txc_kernel_size = cfg["tcnn_kernel_size"]
+        self.txc_dropout = cfg["tcnn_dropout"]
+        self.bias = True
+
+        self.st_gcnns.append(
+            ST_GCNN_layer(
+                self.input_channels, 64, [1, 1], 1, self.input_time_frame, self.joints_to_consider, self.st_gcnn_dropout
+            )
+        )
+
+        self.st_gcnns.append(
+            ST_GCNN_layer(64, 32, [1, 1], 1, self.input_time_frame, self.joints_to_consider, self.st_gcnn_dropout)
+        )
+
+        self.st_gcnns.append(
+            ST_GCNN_layer(32, 64, [1, 1], 1, self.input_time_frame, self.joints_to_consider, self.st_gcnn_dropout)
+        )
+
+        self.st_gcnns.append(
+            ST_GCNN_layer(
+                64, self.input_channels, [1, 1], 1, self.input_time_frame, self.joints_to_consider, self.st_gcnn_dropout
+            )
+        )
+
+        # at this point, we must permute the dimensions of the gcn network, from (N,C,T,V) into (N,T,C,V)
+        self.gru_hidden_size = self.cfg['input_dim'] * self.joints_to_consider  # 512
+        self.gru_cell = nn.GRUCell(
+            input_size=self.cfg['input_dim'] * self.joints_to_consider, hidden_size=self.gru_hidden_size)
+
+        self.linear = nn.Linear(
+            in_features=self.gru_hidden_size * 2, out_features=self.cfg['input_dim'] * self.joints_to_consider)
+
+        self.multihead_attn = nn.MultiheadAttention(embed_dim=self.gru_hidden_size, num_heads=3, batch_first=True, kdim=self.cfg['input_dim'] * self.joints_to_consider, vdim=self.cfg['input_dim'] * self.joints_to_consider)
+        # self.conv_lin = nn.Linear(in_features = self.cfg['input_dim'] * self.joints_to_consider, out_features= self.gru_hidden_size)
+
+    def forward(self, x, y=None):
+        """ 
+        Parameters:
+        input (torch.tensor): Input motion sequence with shape (N, T_in, V, C)
+        Returns:
+        torch.tensor: Output motion sequence with shape (N, T_out, V, C)
+        N: number of sequences in the batch
+        in_channels: 3D joint coordinates or axis angle representations
+        out_channels: 3D joint coordinates or axis angle representations
+        T_in: number of frames in the input sequence
+        T_out: number of frames in the output sequence
+        V: number of joints
+        """
+        raw_x = x
+
+        if y is not None:  # train
+            y = y.permute(0, 3, 1, 2)
+            y = y.permute(0, 2, 1, 3)
+            y = y.transpose(2, 3).reshape(y.shape[0], self.output_time_frame, -1)  # [256,10,66]
+
+        x = x.permute(0, 3, 1, 2)  # (NTVC->NCTV)
+        raw_x = raw_x.permute(0, 3, 1, 2)
+        # encoder part
+        for gcn in self.st_gcnns:
+            x = gcn(x)
+
+        x = x.permute(0, 2, 1, 3)  # prepare the input for the Time-Extrapolator-CNN (NCTV->NTCV)
+        raw_x = raw_x.permute(0, 2, 1, 3)
+
+        # raw_x is raw joint locations, x is encoder output
+        x = x.transpose(2, 3).reshape(x.shape[0], self.input_time_frame, -1)  # [256,10,66]
+        raw_x = raw_x.transpose(2, 3).reshape(x.shape[0], self.input_time_frame, -1)  # [256,10,66]
+
+        # decoder part
+        out = torch.zeros(x.shape[0], self.cfg["output_n"], self.cfg['input_dim'] * self.joints_to_consider).to(x.device)  # [256,25,66]
+        # h_ = self.conv_lin(x[:,-1,:])
+        h_ = x[:, -1, :]
+
+        temp_pred = None
+        for j in range(0, self.cfg["output_n"]):
+            if j == 0:
+                h_ = self.gru_cell(raw_x[:, -1, :], h_)
+
+                attn_output, _ = self.multihead_attn(query=torch.unsqueeze(h_, 1), key=x, value=x)
+                att_vector = torch.cat((h_, attn_output.squeeze()), 1)
+                # residual connection
+                temp_pred = self.linear(att_vector) + raw_x[:, -1, :]
+                out[:, j, :] = temp_pred
+            else:
+                '''
+                r = torch.Tensor([0.0])
+                sampling = torch.bernoulli(r).item() == 1.0 # sampling == True use prediction, False use gt
+
+                if y != None and sampling == False: # train
+                    h_ = self.gru_cell(y[:, j-1, :],h_)
+                    attn_output, _ = self.multihead_attn(query = torch.unsqueeze(h_, 1), key = x, value = x)
+                    att_vector = torch.cat((h_,attn_output.squeeze()),1)     
+                    # residual connection
+                    temp_pred = self.linear(att_vector) + y[:, j-1, :]
+                    out[:, j, :] = temp_pred
+                else: # valid
+                '''
+
+                h_ = self.gru_cell(temp_pred, h_)
+                attn_output, _ = self.multihead_attn(query=torch.unsqueeze(h_, 1), key=x, value=x)
+                att_vector = torch.cat((h_, attn_output.squeeze()), 1)
+                # residual connection
+                temp_pred = self.linear(att_vector) + temp_pred  # .detach() # try .detach() here
+                out[:, j, :] = temp_pred
+
+        # reshape pred suitable to pipeline
+        pred = out.view(x.shape[0], -1, self.joints_to_consider, self.cfg['input_dim']).transpose(2, 3)
+
+        pred = pred.permute(0, 1, 3, 2)  # (NTCV->NTVC)
+        return pred
 
 
 class MotionDiscriminator(nn.Module):
