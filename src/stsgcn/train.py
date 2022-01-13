@@ -49,10 +49,7 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
         gen_optimizer.zero_grad()
 
         with torch.no_grad():
-            if cfg["gen_model"] == "stsgcn_attention":
-                disc_sequences_generated_y = gen_model(disc_sequences_X, disc_sequences_real_y).detach().contiguous()  # (N, T, V, C)
-            else:
-                disc_sequences_generated_y = gen_model(disc_sequences_X).detach().contiguous()  # (N, T, V, C)
+            disc_sequences_generated_y = gen_model(disc_sequences_X).detach().contiguous()  # (N, T, V, C)
 
         disc_prediction_on_real_y = disc_model(disc_sequences_real_y)
         disc_prediction_on_generated_y = disc_model(disc_sequences_generated_y)
@@ -76,11 +73,7 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
     gen_model.train()
     gen_model.zero_grad()
     gen_optimizer.zero_grad()
-    if cfg["gen_model"] == "stsgcn_attention":
-        gen_sequences_yhat = gen_model(gen_sequences_X, gen_sequences_real_y)  # (N, T, V, C)
-        gen_model.scheduled_sampling_target_number = 1.0 - ((epoch + 1) / cfg["n_epochs"])
-    else:
-        gen_sequences_yhat = gen_model(gen_sequences_X)  # (N, T, V, C)
+    gen_sequences_yhat = gen_model(gen_sequences_X)  # (N, T, V, C)
     gen_mpjpe_loss = mpjpe_error(gen_sequences_yhat, gen_sequences_real_y) * 1000
 
     if cfg["use_disc"] and epoch >= cfg["start_training_discriminator_epoch"]:
@@ -88,10 +81,7 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
         disc_model.zero_grad()
         disc_optimizer.zero_grad()
 
-        if cfg["gen_model"] == "stsgcn_attention":
-            disc_sequences_generated_y = gen_model(disc_sequences_X, disc_sequences_real_y).contiguous()  # (N, T, V, C)
-        else:
-            disc_sequences_generated_y = gen_model(disc_sequences_X).contiguous()  # (N, T, V, C)
+        disc_sequences_generated_y = gen_model(disc_sequences_X).contiguous()  # (N, T, V, C)
 
         disc_prediction_on_generated_y = disc_model(disc_sequences_generated_y)
         gen_disc_loss = cfg["gen_disc_loss_weight"] * discriminator_loss(0.8 * torch.ones_like(disc_prediction_on_generated_y, dtype=torch.float, device=device), disc_prediction_on_generated_y)
