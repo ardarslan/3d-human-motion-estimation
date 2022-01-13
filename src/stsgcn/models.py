@@ -116,7 +116,7 @@ class STSGCN(nn.Module):
         
         return x
     
-    
+
 class STSGCN_transformer(nn.Module):
     def __init__(self, cfg):
         super().__init__()
@@ -154,15 +154,15 @@ class STSGCN_transformer(nn.Module):
         )
 
         # at this point, we must permute the dimensions of the gcn network, from (N,C,T,V) into (N,T,C,V)
-        self.gru_hidden_size = 512
+        self.gru_hidden_size = self.cfg['input_dim'] * self.joints_to_consider # 512
         self.gru_cell = nn.GRUCell(
             input_size=self.cfg['input_dim'] * self.joints_to_consider, hidden_size=self.gru_hidden_size)
 
         self.linear = nn.Linear(
             in_features=self.gru_hidden_size *2, out_features=self.cfg['input_dim'] * self.joints_to_consider)
 
-        self.multihead_attn = nn.MultiheadAttention(embed_dim = self.gru_hidden_size, num_heads = 4, batch_first = True, kdim = self.cfg['input_dim'] * self.joints_to_consider, vdim = self.cfg['input_dim'] * self.joints_to_consider)
-        self.conv_lin = nn.Linear(in_features = self.cfg['input_dim'] * self.joints_to_consider, out_features= self.gru_hidden_size)
+        self.multihead_attn = nn.MultiheadAttention(embed_dim = self.gru_hidden_size, num_heads = 3, batch_first = True, kdim = self.cfg['input_dim'] * self.joints_to_consider , vdim = self.cfg['input_dim'] * self.joints_to_consider)
+        #self.conv_lin = nn.Linear(in_features = self.cfg['input_dim'] * self.joints_to_consider, out_features= self.gru_hidden_size)
         
 
     def forward(self, x,y = None):
@@ -204,10 +204,10 @@ class STSGCN_transformer(nn.Module):
         raw_x = raw_x.transpose(2,3).reshape(x.shape[0],self.input_time_frame,-1) #[256,10,66]
         
 
-
         # decoder part
         out = torch.zeros(x.shape[0], self.cfg["output_n"],self.cfg['input_dim'] * self.joints_to_consider).to(x.device) #[256,25,66]
-        h_ = self.conv_lin(x[:,-1,:])
+        #h_ = self.conv_lin(x[:,-1,:])
+        h_ = x[:,-1,:]
         
         temp_pred = None
         for j in range(0, self.cfg["output_n"]):
@@ -220,7 +220,11 @@ class STSGCN_transformer(nn.Module):
                 temp_pred = self.linear(att_vector) + raw_x[:, -1, :]
                 out[:, j, :] = temp_pred
             else:
-                if y != None: # train
+                '''
+                r = torch.Tensor([0.0])
+                sampling = torch.bernoulli(r).item() == 1.0 # sampling == True use prediction, False use gt
+          
+                if y != None and sampling == False: # train
                     h_ = self.gru_cell(y[:, j-1, :],h_)
                     attn_output, _ = self.multihead_attn(query = torch.unsqueeze(h_, 1), key = x, value = x)
                     att_vector = torch.cat((h_,attn_output.squeeze()),1)     
@@ -229,15 +233,17 @@ class STSGCN_transformer(nn.Module):
                     out[:, j, :] = temp_pred
 
                 else: # valid
-                    h_ = self.gru_cell(temp_pred,h_)
-                    attn_output, _ = self.multihead_attn(query = torch.unsqueeze(h_, 1), key = x, value = x)
-                    att_vector = torch.cat((h_,attn_output.squeeze()),1)     
-                    # residual connection
-                    temp_pred = self.linear(att_vector) + temp_pred
-                    out[:, j, :] = temp_pred
+                '''
+                
+                h_ = self.gru_cell(temp_pred,h_)
+                attn_output, _ = self.multihead_attn(query = torch.unsqueeze(h_, 1), key = x, value = x)
+                att_vector = torch.cat((h_,attn_output.squeeze()),1)     
+                # residual connection
+                temp_pred = self.linear(att_vector) + temp_pred#.detach() # try .detach() here
+                out[:, j, :] = temp_pred
         
         #reshape pred suitable to pipeline
-        pred = out.view(x.shape[0],-1,self.cfg['input_dim'],self.joints_to_consider)
+        pred = out.view(x.shape[0],-1,self.joints_to_consider,self.cfg['input_dim']).transpose(2,3)
         
         pred = pred.permute(0, 1, 3, 2)  # (NTCV->NTVC)
         return pred
