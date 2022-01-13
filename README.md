@@ -69,18 +69,17 @@
     
 
     - STSGCN + MotionDisc results:
+        - Amass:
 
-      - Amass:
+        ```bash
+        bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset amass_3d --output_n OUTPUT_N --gen_clip_grad 10 --use_disc
+        ```
 
-    ```bash
-    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset amass_3d --output_n OUTPUT_N --gen_clip_grad 10 --use_disc
-    ```
+        - H36M:
 
-      - H36M:
-
-    ```bash
-    bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset h36m_3d --output_n OUTPUT_N --use_disc
-    ```
+        ```bash
+        bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset h36m_3d --output_n OUTPUT_N --use_disc
+        ```
 
     DATA_DIR should be the directory where the datasets are located.
 
