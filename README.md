@@ -4,7 +4,7 @@
 
     [Human3.6m](http://vision.imar.ro/human3.6m/description.php) in exponential map can be downloaded from [here](http://www.cs.stanford.edu/people/ashesh/h3.6m.zip).
     
-    Directory structure: 
+    Directory structure:
     ```shell script
     H3.6m
     |-- S1
@@ -27,7 +27,7 @@
     ```
     [3DPW](https://virtualhumans.mpi-inf.mpg.de/3DPW/) from their official website.
 
-    Directory structure: 
+    Directory structure:
     ```shell script
     3dpw
     |-- imageFiles
@@ -60,22 +60,23 @@
     ```
 
 5. Submit the train task to GPU with the following command (indicated time necessary to reproduce results)
-    Original STSGCN paper results:
+
+    - Original STSGCN paper results:
 
     ```bash
     bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset DATASET --output_n OUTPUT_N
     ```
     
 
-    STSGCN + MotionDisc results:
+    - STSGCN + MotionDisc results:
 
-    Amass:
+      - Amass:
 
     ```bash
     bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset amass_3d --output_n OUTPUT_N --gen_clip_grad 10 --use_disc
     ```
 
-    H36M:
+      - H36M:
 
     ```bash
     bsub -n 6 -W 24:00 -o output -R "rusage[mem=8192, ngpus_excl_p=1]" -R "select[gpu_mtotal0>=10240]" python run.py --data_dir DATA_DIR --dataset h36m_3d --output_n OUTPUT_N --use_disc
