@@ -21,6 +21,17 @@ ccnn_dropout: 0.0  # ccnn dropout
 # x_birnn: false
 # e_birnn: false
 # freqbasis: dft
+input_hidden_size: 256
+cell_size: 1024
+output_hidden_size: 960
+
+gen_model: rnn_stsE
+recurrent_cell: gru # lstm or gru or rnn
+input_hidden_size: 256
+cell_size: 1024
+output_hidden_size: 960  # 64 for with SPL, 960 for without
+input_dim: 3  # dimensions of the input coordinates
+st_gcnn_dropout: 0.1  # st-gcnn dropout
 
 disc_model: motion_disc
 tcnn_kernel_size: [3, 3]  # kernel for the Time-Extrapolator CNN layers
@@ -41,9 +52,9 @@ gen_scheduler: multi_step_lr
 disc_scheduler: multi_step_lr
 seed: 42
 n_epochs: 100  # number of epochs to train
-batch_size: 256  # batch size
+# batch_size: 256  # batch size
 num_workers: 5  # 0 means use the same thread for preparing data
-gen_lr: 0.01
+# gen_lr: 0.01
 gen_weight_decay: 0.00001
 disc_lr: 0.01
 disc_weight_decay: 0.00001
@@ -54,7 +65,7 @@ start_feeding_discriminator_loss_epoch: 0
 # disc_gaussian_std_step_size: 0.001
 # disc_real_prediction_target: 0.75
 use_scheduler: True  # use MultiStepLR scheduler
-early_stop_patience: 10
+# early_stop_patience: 10
 gen_gamma: 0.1  # gamma correction to the learning rate, after each epoch
 gen_milestones: [15, 25, 35, 40]
 disc_gamma: 0.1
