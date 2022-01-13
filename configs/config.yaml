@@ -13,10 +13,13 @@ embedding_dim: 40  # dimensions for the coordinates of the embedding
 input_dim: 3  # dimensions of the input coordinates
 st_gcnn_dropout: 0.1  # st-gcnn dropout
 ccnn_dropout: 0.0  # ccnn dropout
+
 # attention:
-# n_head: 6
-# transformer_decoder_n_layers: 3
-# rnn_decoder:
+n_head: 6
+transformer_decoder_n_layers: 3
+
+# simple_rnn:
+input_dropout_rate: 0.1
 input_hidden_size: 256
 cell_size: 1024
 output_hidden_size: 960  # 64 for with SPL, 960 for without

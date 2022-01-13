@@ -19,7 +19,8 @@ def get_model(cfg, model_type):
         "stsgcn": STSGCN,
         "motion_disc": MotionDiscriminator,
         "rnn_stsE": RNN_STSEncoder,
-        "stsgcn_transformer": STSGCN_Transformer
+        "stsgcn_transformer": STSGCN_Transformer,
+        "simple_rnn": SimpleRNN
     }
 
     if model_type == "gen":
@@ -27,6 +28,7 @@ def get_model(cfg, model_type):
     elif model_type == "disc":
         model = model_name_model_mapping[cfg["disc_model"]](cfg)
     else:
+        print("Valid Models = ", model_name_model_mapping.keys())
         raise Exception("Not a valid model type.")
 
     print(
@@ -169,13 +171,14 @@ def read_config(config_path, args):
 def save_model(model, cfg):
     print("Saving the best model...")
     checkpoints_dir = os.path.join(cfg["log_dir"], cfg["experiment_time"])
-    torch.save(
-        model.state_dict(), os.path.join(checkpoints_dir, "best_model")
-    )
+    torch.save(model.state_dict(), os.path.join(checkpoints_dir, "best_model"))
 
 
-def load_model(cfg):
-    checkpoints_dir = os.path.join(cfg["log_dir"], cfg["experiment_time"])
+def load_model(cfg, loc=None):
+    if loc is not None:
+        checkpoints_dir = cfg["model_loc"]
+    else:    
+        checkpoints_dir = os.path.join(cfg["log_dir"], cfg["experiment_time"])
     model = get_model(cfg, "gen")
     model.load_state_dict(torch.load(os.path.join(checkpoints_dir, "best_model")))
     return model

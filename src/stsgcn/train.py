@@ -30,12 +30,18 @@ def train_step(gen_model, disc_model, gen_optimizer, disc_optimizer, gen_batch, 
         disc_sequences_X = disc_batch[:, 0:cfg["input_n"], joint_used, :]  # (N, T, V, C)
         disc_sequences_real_y = disc_batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], joint_used, :]  # (N, T, V, C)
         gen_sequences_X = gen_batch[:, 0:cfg["input_n"], joint_used, :]  # (N, T, V, C)
-        gen_sequences_real_y = gen_batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], joint_used, :]  # (N, T, V, C)
+        if cfg["gen_model"] == "simple_rnn":
+            gen_sequences_real_y = gen_batch[:, 1:cfg["input_n"] + cfg["output_n"], joint_used, :]  # (N, T, V, C)
+        else:
+            gen_sequences_real_y = gen_batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], joint_used, :]  # (N, T, V, C)
     elif cfg["dataset"] == "h36m_3d":
         disc_sequences_X = disc_batch[:, 0:cfg["input_n"], indices_to_predict].view(-1, cfg["input_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
         disc_sequences_real_y = disc_batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
         gen_sequences_X = gen_batch[:, 0:cfg["input_n"], indices_to_predict].view(-1, cfg["input_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
-        gen_sequences_real_y = gen_batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
+        if cfg["gen_model"] == "simple_rnn":
+            gen_sequences_real_y = gen_batch[:, 1:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["input_n"]+cfg["output_n"]-1, len(indices_to_predict) // 3, 3)  # (N, T, V, C)
+        else:
+            gen_sequences_real_y = gen_batch[:, cfg["input_n"]:cfg["input_n"] + cfg["output_n"], indices_to_predict].view(-1, cfg["output_n"], len(indices_to_predict) // 3, 3)  # (N, T, V, C)
     else:
         raise Exception("Not a valid dataset.")
 
