@@ -23,20 +23,7 @@
     |-- ...
     `-- Transitions_mocap
     ```
-    [3DPW](https://virtualhumans.mpi-inf.mpg.de/3DPW/) from their official website.
 
-    Directory structure:
-    ```shell script
-    3dpw
-    |-- imageFiles
-    |   |-- courtyard_arguing_00
-    |   |-- courtyard_backpack_00
-    |   |-- ...
-    `-- sequenceFiles
-        |-- test
-        |-- train
-        `-- validation
-    ```
     Put all the downloaded datasets in ../datasets directory.
 2. Create the environment
     ```bash
