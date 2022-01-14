@@ -7,7 +7,7 @@ import yaml
 import shutil
 import torch.nn as nn
 from torch.nn import functional as F
-from stsgcn.models import ZeroVelocity, STSGCN, MotionDiscriminator, RNN_STSEncoder, STSGCN_Transformer
+from stsgcn.models import ZeroVelocity, STSGCN, MotionDiscriminator, RNN_STSEncoder, STSGCN_Transformer, SimpleRNN
 from stsgcn.datasets import H36M_3D_Dataset, H36M_Ang_Dataset, Amass_3D_Dataset, DPW_3D_Dataset
 from torch.utils.data import DataLoader
 from pprint import pprint
