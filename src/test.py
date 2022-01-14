@@ -11,7 +11,7 @@ parser.add_argument('--recurrent_cell',  type=str, default='gru', help='recurren
 parser.add_argument('--use_disc',        dest='use_disc', action='store_true')
 
 parser.add_argument('--batch_size',      type=int, default=256, help='batch size')
-parser.add_argument('--gen_lr',              type=int, default=0.01, help='generator learning rate')
+parser.add_argument('--gen_lr',              type=float, default=0.01, help='generator learning rate')
 parser.add_argument('--gen_clip_grad',       type=float, default=None, help='select max norm to clip gradients')
 parser.add_argument('--gen_gamma',           type=float, default=0.1, help='generator gamma for learning rate scheduling')
 parser.add_argument('--gen_milestones',      type=int, nargs='*', default=[15, 25, 35, 40])
